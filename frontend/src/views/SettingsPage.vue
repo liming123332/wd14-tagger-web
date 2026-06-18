@@ -7,10 +7,12 @@ const rulesYaml = ref('')
 const qualityTags = ref('')
 
 async function load() {
-  const rr = await fetch('/api/config/rules')
-  rulesYaml.value = JSON.stringify(await rr.json(), null, 2)
-  const q = await fetch('/api/config/quality').then(r => r.json())
-  qualityTags.value = (q.tags || []).join(', ')
+  try {
+    const rr = await fetch('/api/config/rules')
+    rulesYaml.value = JSON.stringify(await rr.json(), null, 2)
+    const q = await fetch('/api/config/quality').then(r => r.json())
+    qualityTags.value = (q.tags || []).join(', ')
+  } catch (e: any) { msg.error('加载配置失败：' + e.message) }
 }
 onMounted(load)
 
@@ -20,9 +22,11 @@ async function saveRules() {
   msg.info('词表展示为只读，修改请编辑 backend/config/tag_rules.yaml 后重启')
 }
 async function saveQuality() {
-  const tags = qualityTags.value.split(',').map(s => s.trim()).filter(Boolean)
-  await fetch('/api/config/quality', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tags }) })
-  msg.success('质量词已保存（新反推生效）')
+  try {
+    const tags = qualityTags.value.split(/[,，]/).map(s => s.trim()).filter(Boolean)
+    await fetch('/api/config/quality', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tags }) })
+    msg.success('质量词已保存（新反推生效）')
+  } catch (e: any) { msg.error('保存失败：' + e.message) }
 }
 </script>
 
@@ -34,7 +38,7 @@ async function saveQuality() {
     </n-card>
     <n-card title="分类词表（只读预览）">
       <n-input v-model:value="rulesYaml" type="textarea" :rows="16" readonly />
-      <n-button style="margin-top:8px" @click="saveRules">说明</n-button>
+      <n-button style="margin-top:8px" @click="saveRules">只读说明</n-button>
     </n-card>
   </n-space>
 </template>
