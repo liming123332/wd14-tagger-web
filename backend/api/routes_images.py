@@ -35,3 +35,47 @@ def get_file(mid: str, name: str):
         raise HTTPException(status_code=404, detail="not found")
     ctype = mimetypes.guess_type(str(p))[0] or "application/octet-stream"
     return FileResponse(p, media_type=ctype)
+
+
+from typing import Optional
+from fastapi import Body
+from pydantic import BaseModel
+from backend.deps import get_classifier, get_tagger
+
+
+class TagParams(BaseModel):
+    gen_th: float = 0.35
+    char_th: float = 0.9
+    use_char: bool = True
+
+
+@router.post("/{mid}/tag")
+def tag_image(mid: str, params: TagParams):
+    storage = get_storage()
+    meta = storage.get_meta(mid)
+    img_path = storage.file_path(mid, meta.image.original)
+    from PIL import Image as _PIL
+    pil = _PIL.open(img_path)
+    raw = get_tagger().tag_image(pil, params.gen_th, params.char_th, params.use_char)
+    meta.tagger.gen_threshold = params.gen_th
+    meta.tagger.char_threshold = params.char_th
+    meta.tagger.raw_tags = raw
+    result = get_classifier().classify(raw)
+    meta.categories = {k: v for k, v in result.items() if k != "extras"}
+    meta.extras = result["extras"]
+    storage.save_meta(mid, meta)
+    return meta.model_dump()
+
+
+@router.post("/{mid}/reclassify")
+def reclassify(mid: str):
+    storage = get_storage()
+    meta = storage.get_meta(mid)
+    existing = dict(meta.categories)
+    existing["extras"] = meta.extras
+    existing["quality"] = meta.categories.get("quality")
+    result = get_classifier().classify(meta.tagger.raw_tags, existing=existing)
+    meta.categories = {k: v for k, v in result.items() if k != "extras"}
+    meta.extras = result["extras"]
+    storage.save_meta(mid, meta)
+    return meta.model_dump()
