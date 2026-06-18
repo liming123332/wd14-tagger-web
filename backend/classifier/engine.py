@@ -23,6 +23,11 @@ class Classifier:
         data = yaml.safe_load(self.rules_path.read_text(encoding="utf-8"))
         self.priority = data.get("priority", settings.PRIORITY)
         self.categories = data.get("categories", {})
+        # 规则词统一小写，保证大小写不敏感匹配
+        for spec in self.categories.values():
+            for k in ("exact", "suffix", "contains"):
+                if isinstance(spec.get(k), list):
+                    spec[k] = [str(w).lower() for w in spec[k]]
         q = yaml.safe_load(self.quality_path.read_text(encoding="utf-8"))
         self.quality_tags = list(q.get("tags", []))
 
@@ -66,16 +71,18 @@ class Classifier:
             if not placed:
                 unmatched.append(tag)
 
-        # 5 个内容类：受保护则保留，否则用新桶
+        # 5 个内容类：受保护则保留，否则用新桶（按分数降序）
         for cat in self.priority:
             ex = existing.get(cat)
             if ex is not None and ex.user_edited:
                 result[cat] = ex.model_copy()
             else:
-                result[cat] = CategoryData(tags=buckets[cat])
+                ordered = sorted(buckets[cat], key=lambda t: raw_tags.get(t, 0.0), reverse=True)
+                result[cat] = CategoryData(tags=ordered)
 
-        # extras：始终重算
-        result["extras"] = CategoryData(tags=unmatched)
+        # extras：始终重算（按分数降序）
+        ordered_extras = sorted(unmatched, key=lambda t: raw_tags.get(t, 0.0), reverse=True)
+        result["extras"] = CategoryData(tags=ordered_extras)
 
         # 为非 user_edited 类生成 phrase（按反推分数降序）
         for key, cat in result.items():

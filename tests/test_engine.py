@@ -17,14 +17,12 @@ categories:
   clothing:
     suffix: [dress, shirt]
   view:
-    exact: [close-up]
+    exact: [close-up, overlap]
   action:
-    exact: [sitting, smile]
+    exact: [sitting, smile, overlap]
     suffix: [pose]
   scene:
     exact: [indoors]
-quality_template:
-  tags: [masterpiece, best quality]
 """.strip(),
         encoding="utf-8",
     )
@@ -86,3 +84,11 @@ def test_quality_protected_when_user_edited(clf):
     existing = {"quality": CategoryData(tags=["my quality"], phrase="my quality", user_edited=True)}
     res = clf.classify({}, existing=existing)
     assert res["quality"].tags == ["my quality"]
+
+
+def test_first_match_wins_overlapping_rules(clf):
+    # "overlap" 同时命中 view 和 action，应进 priority 靠前的 view
+    res = clf.classify({"overlap": 0.5})
+    assert "overlap" in res["view"].tags
+    assert "overlap" not in res["action"].tags
+    assert "overlap" not in res["extras"].tags
