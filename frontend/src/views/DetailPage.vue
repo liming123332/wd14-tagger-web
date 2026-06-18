@@ -1,1 +1,92 @@
-<template><div>Detail</div></template>
+<script setup lang="ts">
+import { ref, computed, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { NSpace, NButton, NRadioGroup, NRadioButton, NImage, NCard, useMessage, NPopconfirm } from 'naive-ui'
+import TagEditor from '../components/TagEditor.vue'
+import { getMeta, saveMeta, tagImage, reclassify, deleteImage, fileUrl } from '../api/client'
+import { buildPrompt } from '../detail-utils'
+
+const route = useRoute(); const router = useRouter(); const msg = useMessage()
+const id = computed(() => route.params.id as string)
+const meta = ref<any>(null)
+const mode = ref<'tags' | 'phrase'>('tags')
+const dirty = ref(false)
+
+async function load() { meta.value = await getMeta(id.value); dirty.value = false }
+watch(id, load, { immediate: true })
+
+const KEY_TITLES: [string, string, string][] = [
+  ['head', '角色头部', '#4CAF50'], ['clothing', '服装', '#2196F3'],
+  ['view', '视角构图', '#9C27B0'], ['action', '动作', '#FF9800'],
+  ['scene', '场景', '#795548'], ['quality', '质量词（预设）', '#607D8B'],
+]
+
+function setCat(key: string, val: any) {
+  meta.value.categories[key] = val; dirty.value = true
+}
+function setExtras(val: any) { meta.value.extras = val; dirty.value = true }
+
+// 应用短句：从 phrase 拆 tags 覆盖该类
+function applyPhrase(key: string, tags: string[]) {
+  const cur = key === 'extras' ? meta.value.extras : meta.value.categories[key]
+  const next = { ...cur, tags, user_edited: true }
+  if (key === 'extras') setExtras(next); else setCat(key, next)
+}
+
+async function save() {
+  try { await saveMeta(id.value, meta.value); dirty.value = false; msg.success('已保存') }
+  catch (e: any) { msg.error('保存失败：' + e.message) }
+}
+
+async function reTag() {
+  meta.value = await tagImage(id.value, meta.value.tagger.gen_threshold, meta.value.tagger.char_threshold)
+  msg.success('反推完成')
+}
+async function reClassify() {
+  meta.value = await reclassify(id.value); msg.success('重分类完成（跳过手改类）')
+}
+async function del() {
+  await deleteImage(id.value); msg.success('已删除'); router.push('/gallery')
+}
+
+const fullPrompt = computed(() => meta.value ? buildPrompt(meta.value) : '')
+async function copyPrompt() {
+  await navigator.clipboard.writeText(fullPrompt.value); msg.success('已复制完整 prompt')
+}
+</script>
+
+<template>
+  <div v-if="meta" style="display:grid;grid-template-columns:minmax(280px,1fr) minmax(0,2fr);gap:16px">
+    <div>
+      <n-card>
+        <n-image :src="fileUrl(id, meta.image.original)" object-fit="contain" style="max-height:420px;width:100%" />
+        <div style="font-size:12px;margin-top:8px">
+          <div>{{ meta.source_name }}</div>
+          <div>{{ meta.image.width }}×{{ meta.image.height }} · {{ meta.model }}</div>
+          <div>通用 {{ meta.tagger.gen_threshold }} / 角色 {{ meta.tagger.char_threshold }}</div>
+        </div>
+        <n-space vertical style="margin-top:8px">
+          <n-button size="small" @click="reTag">重新反推</n-button>
+          <n-button size="small" @click="reClassify">重分类</n-button>
+          <n-popconfirm @positive-click="del"><template #trigger><n-button size="small" type="error">删除</n-button></template>确认删除？</n-popconfirm>
+        </n-space>
+      </n-card>
+    </div>
+    <div>
+      <n-space align="center" style="margin-bottom:10px">
+        <n-radio-group v-model:value="mode" size="small">
+          <n-radio-button value="tags">标签</n-radio-button>
+          <n-radio-button value="phrase">短句</n-radio-button>
+        </n-radio-group>
+        <n-button size="small" @click="copyPrompt">复制完整 prompt</n-button>
+        <n-button size="small" type="primary" :disabled="!dirty" @click="save">保存</n-button>
+      </n-space>
+      <TagEditor v-for="[key, title, color] in KEY_TITLES" :key="key" :title="title" :color="color"
+                 :mode="mode" :model-value="meta.categories[key]"
+                 @update:modelValue="(v) => setCat(key, v)" @apply-phrase="(t) => applyPhrase(key, t)" />
+      <TagEditor title="未归类 extras（可拖到上面各类）" color="#9E9E9E" :mode="mode"
+                 :model-value="meta.extras"
+                 @update:modelValue="setExtras" @apply-phrase="(t) => applyPhrase('extras', t)" />
+    </div>
+  </div>
+</template>

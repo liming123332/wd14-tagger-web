@@ -59,7 +59,3 @@ export function fileUrl(id: string, name: string) {
   return `${base}/api/images/${id}/file/${name}`
 }
 
-export function buildPrompt(meta: any): string {
-  const order = ['quality', 'head', 'clothing', 'view', 'action', 'scene']
-  return order.map(k => meta.categories?.[k]?.tags ?? []).flat().join(', ')
-}
