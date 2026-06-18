@@ -1,4 +1,3 @@
-from pathlib import Path
 import yaml
 from fastapi import APIRouter
 from pydantic import BaseModel

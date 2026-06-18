@@ -1,10 +1,12 @@
-import yaml
 from fastapi.testclient import TestClient
 from backend.main import create_app
 
 
 def _app(tmp_path, monkeypatch):
     monkeypatch.setattr("backend.storage.store.settings.IMAGES_DIR", tmp_path / "imgs")
+    q = tmp_path / "quality_template.yaml"
+    q.write_text("tags: [masterpiece, best quality, highres]\n", encoding="utf-8")
+    monkeypatch.setattr("backend.config.settings.QUALITY_TEMPLATE_PATH", q)
     return create_app()
 
 
