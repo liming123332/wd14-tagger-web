@@ -1,0 +1,23 @@
+priority: [head, clothing, view, action, scene]
+
+categories:
+  head:
+    suffix: [hair, eyes, bangs, fringe, ponytail, twintails, braid, braids, ahoge, horns, eyelashes]
+    exact: [heterochromia, freckles, glasses, blunt bangs, sidelocks, hair ornament, hairband]
+  clothing:
+    suffix: [dress, shirt, skirt, pants, jacket, coat, hat, boots, shoes, gloves, scarf, ribbon, stockings, socks, blazer, hoodie, sweater, uniform, swimsuit, bikini, bra, panties, sleeves, collar, tie, bow, cape, cloak, kimono]
+    contains: [wear]
+  view:
+    suffix: [shot, view, angle]
+    exact: [close-up, cowboy shot, from above, from behind, from side, from below, upper body, lower body, full body, dutch angle, portrait, wide shot, multiple views]
+    contains: [framed]
+  action:
+    exact: [sitting, standing, lying, kneeling, walking, running, jumping, leaning, smiling, smile, smirk, blush, open mouth, closed mouth, crying, tears, angry, happy, sad, surprised, looking, looking away, looking at viewer, hand on hip, arms crossed, arms behind back, peace sign, waving, holding]
+    suffix: [pose, smile]
+  scene:
+    exact: [indoors, outdoors, night, day, sunset, sunrise, sunlight, moonlight, window, forest, city, sky, clouds, water, sea, ocean, beach, table, chair, bed, sofa, grass, flowers, snow, rain, blurred background]
+    suffix: [background, lighting]
+    contains: [atmosphere, environment]
+
+quality_template:
+  tags: [masterpiece, best quality, highres]
