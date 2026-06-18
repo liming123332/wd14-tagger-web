@@ -57,13 +57,13 @@ function onDrop(e: DragEvent) {
       </template>
       <template v-else>
         <textarea class="phrase-box" :value="modelValue.phrase" @input="onPhraseInput"
-                  rows="2" placeholder="短句（可编辑）"></textarea>
+                  rows="2" placeholder="短句（用逗号分隔多标签）"></textarea>
         <n-popconfirm @positive-click="applyPhrase">
           <template #trigger><n-button size="tiny" :disabled="!modelValue.user_edited">应用短句到标签</n-button></template>
           将用短句覆盖当前标签？
         </n-popconfirm>
       </template>
-      <div v-if="dragging" class="drop-hint">拖到此处</div>
+      <div v-if="dragging" class="drop-hint">拖到此处（复制）</div>
     </div>
   </div>
 </template>

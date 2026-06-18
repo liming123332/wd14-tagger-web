@@ -12,7 +12,12 @@ const meta = ref<any>(null)
 const mode = ref<'tags' | 'phrase'>('tags')
 const dirty = ref(false)
 
-async function load() { meta.value = await getMeta(id.value); dirty.value = false }
+async function load() {
+  const cur = id.value
+  const m = await getMeta(cur)
+  if (cur !== id.value) return  // 已切到其它图，丢弃旧结果防竞态
+  meta.value = m; dirty.value = false
+}
 watch(id, load, { immediate: true })
 
 const KEY_TITLES: [string, string, string][] = [
@@ -51,7 +56,8 @@ async function del() {
 
 const fullPrompt = computed(() => meta.value ? buildPrompt(meta.value) : '')
 async function copyPrompt() {
-  await navigator.clipboard.writeText(fullPrompt.value); msg.success('已复制完整 prompt')
+  try { await navigator.clipboard.writeText(fullPrompt.value); msg.success('已复制完整 prompt') }
+  catch (e: any) { msg.error('复制失败：' + e.message) }
 }
 </script>
 
@@ -84,7 +90,7 @@ async function copyPrompt() {
       <TagEditor v-for="[key, title, color] in KEY_TITLES" :key="key" :title="title" :color="color"
                  :mode="mode" :model-value="meta.categories[key]"
                  @update:modelValue="(v) => setCat(key, v)" @apply-phrase="(t) => applyPhrase(key, t)" />
-      <TagEditor title="未归类 extras（可拖到上面各类）" color="#9E9E9E" :mode="mode"
+      <TagEditor title="未归类 extras（拖到各类为复制，不会移除原标签）" color="#9E9E9E" :mode="mode"
                  :model-value="meta.extras"
                  @update:modelValue="setExtras" @apply-phrase="(t) => applyPhrase('extras', t)" />
     </div>

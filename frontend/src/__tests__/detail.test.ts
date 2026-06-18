@@ -10,13 +10,21 @@ describe('buildPrompt', () => {
     } }
     expect(buildPrompt(meta)).toBe('masterpiece, long hair, dress, close-up, sitting, indoors')
   })
+  it('跳过空类与空字符串标签', () => {
+    const meta = { categories: {
+      quality: { tags: [] }, head: { tags: ['long hair', ''] },
+      clothing: { tags: ['dress'] }, view: { tags: [] },
+      action: { tags: ['sitting'] }, scene: { tags: [] },
+    } }
+    expect(buildPrompt(meta)).toBe('long hair, dress, sitting')
+  })
 })
 
 describe('parsePhrase', () => {
   it('按逗号拆分', () => {
     expect(parsePhrase('long hair, blue eyes,smile')).toEqual(['long hair', 'blue eyes', 'smile'])
   })
-  it('无逗号按空格拆', () => {
+  it('无逗号视为单个标签', () => {
     expect(parsePhrase('long hair')).toEqual(['long hair'])
   })
   it('空串返回空', () => {
