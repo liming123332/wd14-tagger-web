@@ -87,7 +87,7 @@ class Storage:
                 items.append({"id": mid, "source_name": m.source_name,
                               "thumb": m.image.thumb, "width": m.image.width, "height": m.image.height})
             except Exception as e:
-                logger.debug("skipping image dir %s: %s", mid, e)
+                logger.warning("skipping image dir %s: %s", mid, e)
                 continue
         return {"items": items, "total": total, "page": page, "size": size}
 

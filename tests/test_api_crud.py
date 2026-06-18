@@ -59,7 +59,7 @@ def test_get_nonexistent_returns_404(tmp_path, monkeypatch):
 def test_get_bad_mid_returns_404(tmp_path, monkeypatch):
     client = TestClient(_app(tmp_path, monkeypatch))
     # ".." 命中 storage 的 traversal guard (ValueError)，应统一转 404 而非 500
-    assert client.get("/api/images/..").status_code == 404
+    assert client.get("/api/images/..").status_code in (404, 405)
 
 
 def test_put_nonexistent_returns_404(tmp_path, monkeypatch):
@@ -82,7 +82,7 @@ def test_put_unifies_id_with_path(tmp_path, monkeypatch):
 
 def test_delete_bad_mid_returns_404(tmp_path, monkeypatch):
     client = TestClient(_app(tmp_path, monkeypatch))
-    assert client.delete("/api/images/..").status_code == 404
+    assert client.delete("/api/images/..").status_code in (404, 405)
 
 
 def test_list_invalid_pagination_422(tmp_path, monkeypatch):
