@@ -11,15 +11,16 @@ router = APIRouter(prefix="/api/images", tags=["images"])
 @router.post("")
 def upload_images(files: list[UploadFile] = File(...)):
     storage = get_storage()
-    ids = []
+    # 先全部解码验证，避免部分失败时已写盘的孤儿文件
+    decoded = []
     for f in files:
         try:
             pil = Image.open(f.file)
             pil.load()
-        except (UnidentifiedImageError, Exception) as e:
+        except (UnidentifiedImageError, OSError) as e:
             raise HTTPException(status_code=400, detail=f"bad image {f.filename}: {e}")
-        mid = storage.save_upload(pil, f.filename or "upload.png")
-        ids.append(mid)
+        decoded.append((pil, f.filename or "upload.png"))
+    ids = [storage.save_upload(pil, name) for pil, name in decoded]
     return {"ids": ids}
 
 
@@ -32,9 +33,5 @@ def get_file(mid: str, name: str):
         raise HTTPException(status_code=400, detail="bad file name")
     if not p.exists():
         raise HTTPException(status_code=404, detail="not found")
-    # Windows 的 mimetypes 数据库不含 .webp，会回退到 application/octet-stream，
-    # 显式补一个 image/* 类型，保证缩略图等图片资源 content-type 正确。
-    ctype, _ = mimetypes.guess_type(str(p))
-    if not ctype or not ctype.startswith("image"):
-        ctype = "image/webp" if p.suffix.lower() == ".webp" else "application/octet-stream"
+    ctype = mimetypes.guess_type(str(p))[0] or "application/octet-stream"
     return FileResponse(p, media_type=ctype)

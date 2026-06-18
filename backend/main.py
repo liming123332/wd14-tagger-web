@@ -18,6 +18,8 @@ def _validate_config() -> None:
 
 
 def create_app() -> FastAPI:
+    import mimetypes
+    mimetypes.add_type("image/webp", ".webp")
     _validate_config()
     app = FastAPI(title="WD14 Tagger Web")
     app.add_middleware(CORSMiddleware, allow_origins=["*"],

@@ -44,3 +44,16 @@ def test_get_file(tmp_path, monkeypatch):
     r = client.get(f"/api/images/{ids[0]}/file/thumb.webp")
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("image")
+
+
+def test_upload_bad_image_returns_400(tmp_path, monkeypatch):
+    client = TestClient(_app(tmp_path, monkeypatch))
+    r = client.post("/api/images", files={"files": ("bad.png", io.BytesIO(b"not an image"), "image/png")})
+    assert r.status_code == 400
+
+
+def test_get_missing_file_returns_404(tmp_path, monkeypatch):
+    client = TestClient(_app(tmp_path, monkeypatch))
+    ids = client.post("/api/images", files={"files": ("a.png", _png_bytes(), "image/png")}).json()["ids"]
+    r = client.get(f"/api/images/{ids[0]}/file/nope.png")
+    assert r.status_code == 404

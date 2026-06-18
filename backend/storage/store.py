@@ -23,6 +23,13 @@ class Storage:
         return f"{ts}-{secrets.token_hex(2)}"
 
     def image_dir(self, mid: str) -> Path:
+        # 防 mid 穿越（不依赖路由规范化）：拒绝空/点/斜杠，并校验 resolve 后仍在 data_root 内
+        if mid in ("", ".", "..") or "/" in mid or "\\" in mid:
+            raise ValueError("bad image id")
+        root = self.data_root.resolve()
+        resolved = (root / mid).resolve()
+        if resolved != root and root not in resolved.parents:
+            raise ValueError("bad image id")
         return self.data_root / mid
 
     def _ext_for(self, source_name: str) -> str:
