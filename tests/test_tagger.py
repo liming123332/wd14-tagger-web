@@ -22,7 +22,7 @@ def test_prep_shape_and_bgr(tmp_path):
     assert arr[0, 0, 0, 0] == 30.0
 
 
-def test_tag_image_with_mock_session(tmp_path, monkeypatch):
+def test_tag_image_with_mock_session(tmp_path):
     t = _make_tagger_no_load(tmp_path)
     t.tag_names = ["long_hair", "blue_eyes", "dress", "rating_safe"]
     t.general_idx = [0, 1, 2]
@@ -42,3 +42,23 @@ def test_tag_image_with_mock_session(tmp_path, monkeypatch):
     assert set(out.keys()) == {"long hair", "blue eyes"}
     assert out["long hair"] == pytest.approx(0.9, abs=1e-6)
     assert out["blue eyes"] == pytest.approx(0.4, abs=1e-6)
+
+
+def test_threshold_is_strict(tmp_path):
+    # pr == gen_th 时不计入（严格大于），防未来被误改为 >=
+    t = _make_tagger_no_load(tmp_path)
+    t.tag_names = ["border", "above"]
+    t.general_idx = [0, 1]
+    t.char_idx = []
+    t.rating_idx = []
+
+    class FakeSession:
+        def run(self, *_args, **_kw):
+            return [np.array([[0.35, 0.36]], dtype=np.float32)]
+
+    t.session = FakeSession()
+    t.input_name = "x"
+    img = Image.new("RGB", (32, 32))
+    out = t.tag_image(img, gen_th=0.35, char_th=0.9, use_char=False)
+    assert "border" not in out
+    assert out == {"above": pytest.approx(0.36, abs=1e-6)}

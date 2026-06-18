@@ -6,6 +6,10 @@ import urllib.request
 
 from backend.config import settings
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class WD14Tagger:
     """WD14 ONNX 反推。移植自参考项目 taggers_core.py，接收 PIL Image。"""
@@ -36,9 +40,19 @@ class WD14Tagger:
             if dst.exists():
                 continue
             tmp = dst.with_suffix(dst.suffix + ".part")
-            with urllib.request.urlopen(url) as resp, tmp.open("wb") as f:
-                shutil.copyfileobj(resp, f)
-            tmp.replace(dst)
+            try:
+                with urllib.request.urlopen(url) as resp:
+                    expected = resp.headers.get("Content-Length")
+                    with tmp.open("wb") as f:
+                        shutil.copyfileobj(resp, f)
+                if expected is not None and str(tmp.stat().st_size) != expected:
+                    raise IOError(
+                        f"{name} 下载不完整：期望 {expected} 字节，实际 {tmp.stat().st_size}"
+                    )
+                tmp.replace(dst)
+            except BaseException:
+                tmp.unlink(missing_ok=True)
+                raise
 
     def _load(self) -> None:
         import onnxruntime as ort
@@ -57,6 +71,7 @@ class WD14Tagger:
             pass
 
         self.session = InferenceSession(str(onnx_path), providers=providers)
+        logger.info("WD14 ONNX providers: %s", self.session.get_providers())
         self.input_name = self.session.get_inputs()[0].name
         shape = self.session.get_inputs()[0].shape
         if len(shape) == 4:
