@@ -1,3 +1,4 @@
+import pytest
 from PIL import Image
 from backend.storage.store import Storage
 
@@ -38,6 +39,8 @@ def test_list_images_pagination(tmp_path):
     res = s.list_images(page=1, size=2)
     assert res["total"] == 3
     assert len(res["items"]) == 2
+    # id 为零填充时间戳，降序即"最新优先"
+    assert res["items"][0]["id"] > res["items"][1]["id"]
     res2 = s.list_images(page=2, size=2)
     assert len(res2["items"]) == 1
 
@@ -62,3 +65,16 @@ def test_save_and_reload_meta(tmp_path):
     s.save_meta(mid, meta)
     again = s.get_meta(mid)
     assert again.categories["head"].tags == ["long hair"]
+
+
+def test_file_path_rejects_traversal(tmp_path):
+    s = Storage(tmp_path)
+    mid = "20260101-000000-abcd"
+    # 含路径分隔符应被拒绝
+    with pytest.raises(ValueError):
+        s.file_path(mid, "../evil.png")
+    with pytest.raises(ValueError):
+        s.file_path(mid, "sub\\x.png")
+    # 合法文件名返回镜像目录内的路径
+    p = s.file_path(mid, "thumb.webp")
+    assert p.name == "thumb.webp"

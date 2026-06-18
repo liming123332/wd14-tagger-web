@@ -1,12 +1,15 @@
 from __future__ import annotations
-import json
+import logging
 import secrets
+import shutil
 from datetime import datetime
 from pathlib import Path
 from PIL import Image
 
 from backend.models import Meta, ImageInfo, TaggerInfo
 from backend.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class Storage:
@@ -76,14 +79,14 @@ class Storage:
                 m = self.get_meta(mid)
                 items.append({"id": mid, "source_name": m.source_name,
                               "thumb": m.image.thumb, "width": m.image.width, "height": m.image.height})
-            except Exception:
+            except Exception as e:
+                logger.debug("skipping image dir %s: %s", mid, e)
                 continue
         return {"items": items, "total": total, "page": page, "size": size}
 
     def delete(self, mid: str) -> None:
         d = self.image_dir(mid)
         if d.exists():
-            import shutil
             shutil.rmtree(d)
 
     def file_path(self, mid: str, name: str) -> Path:
