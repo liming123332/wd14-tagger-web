@@ -23,6 +23,8 @@ def create_app() -> FastAPI:
     app.add_middleware(CORSMiddleware, allow_origins=["*"],
                        allow_methods=["*"], allow_headers=["*"])
     app.include_router(routes_config.router)
+    from backend.api import routes_images
+    app.include_router(routes_images.router)
     return app
 
 
