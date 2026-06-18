@@ -26,7 +26,9 @@ def create_app() -> FastAPI:
                        allow_methods=["*"], allow_headers=["*"])
     app.include_router(routes_config.router)
     from backend.api import routes_images
+    from backend.api import routes_batch
     app.include_router(routes_images.router)
+    app.include_router(routes_batch.router)
     return app
 
 
