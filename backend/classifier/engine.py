@@ -77,12 +77,8 @@ class Classifier:
         # extras：始终重算
         result["extras"] = CategoryData(tags=unmatched)
 
-        # 为非 user_edited 类生成 phrase。
-        # tags_to_phrase 内部用 reverse=True（分数从高到低）；这里取负分，
-        # 等价于按原始分数从低到高排序——即把置信度最低的标签放在最前面，
-        # 让最强匹配留在末尾（与 UI 期望展示顺序一致）。
-        neg_scores = {t: -s for t, s in raw_tags.items()}
+        # 为非 user_edited 类生成 phrase（按反推分数降序）
         for key, cat in result.items():
             if not cat.user_edited:
-                cat.phrase = tags_to_phrase(cat.tags, neg_scores)
+                cat.phrase = tags_to_phrase(cat.tags, raw_tags)
         return result
