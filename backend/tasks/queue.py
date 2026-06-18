@@ -1,9 +1,17 @@
 from __future__ import annotations
 import asyncio
+import logging
 import secrets
+from collections import OrderedDict
 from dataclasses import dataclass, field
 
+from PIL import Image
+
 from backend import deps
+
+logger = logging.getLogger(__name__)
+
+MAX_BATCHES = 16
 
 
 @dataclass
@@ -20,12 +28,14 @@ class BatchState:
 
 class BatchQueue:
     def __init__(self):
-        self._batches: dict[str, BatchState] = {}
+        self._batches: "OrderedDict[str, BatchState]" = OrderedDict()
 
     def submit(self, ids: list[str], gen_th: float, char_th: float) -> str:
         batch_id = secrets.token_hex(8)
         state = BatchState(batch_id=batch_id, total=len(ids))
         self._batches[batch_id] = state
+        while len(self._batches) > MAX_BATCHES:
+            self._batches.popitem(last=False)  # 删最旧，保留最近 N 个
         asyncio.create_task(self._run(state, ids, gen_th, char_th))
         return batch_id
 
@@ -33,12 +43,11 @@ class BatchQueue:
         storage = deps.get_storage()
         clf = deps.get_classifier()
         tagger = deps.get_tagger()
-        from PIL import Image
         for mid in ids:
             try:
                 meta = storage.get_meta(mid)
-                pil = Image.open(storage.file_path(mid, meta.image.original))
-                raw = await asyncio.to_thread(tagger.tag_image, pil, gen_th, char_th, True)
+                with Image.open(storage.file_path(mid, meta.image.original)) as pil:
+                    raw = await asyncio.to_thread(tagger.tag_image, pil, gen_th, char_th, True)
                 meta.tagger.gen_threshold = gen_th
                 meta.tagger.char_threshold = char_th
                 meta.tagger.raw_tags = raw
@@ -50,6 +59,7 @@ class BatchQueue:
                 evt = {"type": "progress", "done": state.done + 1, "total": state.total,
                        "current": meta.source_name, "id": mid, "status": "ok"}
             except Exception as e:
+                logger.warning("batch item %s failed: %r", mid, e)
                 state.failed += 1
                 evt = {"type": "error", "id": mid, "message": str(e)}
             state.events.append(evt)
@@ -57,7 +67,6 @@ class BatchQueue:
             for w in state.waiters:
                 w.set()
             state.waiters.clear()
-            await asyncio.sleep(0)
         state.finished = True
         state.events.append({"type": "done", "ok": state.ok, "failed": state.failed})
         for w in state.waiters:

@@ -1,6 +1,6 @@
 import asyncio
 import json
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -17,6 +17,8 @@ class BatchRequest(BaseModel):
 
 @router.post("/tag")
 async def submit_batch(req: BatchRequest):
+    if not req.ids:
+        raise HTTPException(status_code=400, detail="ids must not be empty")
     bid = get_queue().submit(req.ids, req.gen_th, req.char_th)
     return {"batch_id": bid}
 

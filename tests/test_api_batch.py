@@ -1,4 +1,5 @@
 import io, time
+import pytest
 from PIL import Image
 from fastapi.testclient import TestClient
 from backend.main import create_app
@@ -23,6 +24,14 @@ def _png():
     buf = io.BytesIO(); Image.new("RGB", (20, 20)).save(buf, format="PNG"); buf.seek(0); return buf
 
 
+@pytest.fixture(autouse=True)
+def _reset_batch_queue():
+    import backend.tasks.queue as q
+    q._queue = None
+    yield
+    q._queue = None
+
+
 def test_batch_runs_all(tmp_path, monkeypatch):
     # 用 with 保持 app lifespan/portal 活跃，使后台 asyncio.create_task 得以持续调度
     with TestClient(_app(tmp_path, monkeypatch)) as client:
@@ -45,3 +54,38 @@ def test_batch_runs_all(tmp_path, monkeypatch):
         # 验证已落库
         meta = client.get(f"/api/images/{ids[0]}").json()
         assert "long hair" in meta["categories"]["head"]["tags"]
+
+
+def test_batch_single_failure_does_not_break(tmp_path, monkeypatch):
+    counter = {"n": 0}
+
+    class MixedTagger:
+        def tag_image(self, pil, gen_th=0.35, char_th=0.9, use_char=True):
+            counter["n"] += 1
+            if counter["n"] == 2:
+                raise RuntimeError("boom")
+            return {"long hair": 0.9}
+
+    app = _app(tmp_path, monkeypatch)
+    monkeypatch.setattr(deps, "get_tagger", lambda: MixedTagger())
+    with TestClient(app) as client:
+        ids = client.post("/api/images", files=[
+            ("files", ("a.png", _png(), "image/png")),
+            ("files", ("b.png", _png(), "image/png")),
+        ]).json()["ids"]
+        batch_id = client.post("/api/batch/tag", json={"ids": ids, "gen_th": 0.35, "char_th": 0.9}).json()["batch_id"]
+        for _ in range(50):
+            s = client.get(f"/api/batch/{batch_id}/status").json()
+            if s["done"]:
+                break
+            time.sleep(0.05)
+        assert s["done"] is True
+        assert s["total"] == 2
+        assert s["ok"] == 1
+        assert s["failed"] == 1
+
+
+def test_batch_empty_ids_rejected(tmp_path, monkeypatch):
+    with TestClient(_app(tmp_path, monkeypatch)) as client:
+        r = client.post("/api/batch/tag", json={"ids": []})
+        assert r.status_code == 400
