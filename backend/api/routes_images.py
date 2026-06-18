@@ -1,5 +1,5 @@
 import mimetypes
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query
 from fastapi.responses import FileResponse
 from PIL import Image, UnidentifiedImageError
 
@@ -90,7 +90,7 @@ from backend.models import Meta
 
 
 @router.get("")
-def list_images(page: int = 1, size: int = 24):
+def list_images(page: int = Query(1, ge=1), size: int = Query(24, ge=1, le=200)):
     return get_storage().list_images(page, size)
 
 
@@ -99,18 +99,28 @@ def get_meta_endpoint(mid: str):
     storage = get_storage()
     try:
         return storage.get_meta(mid).model_dump()
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="not found")
+    except (FileNotFoundError, ValueError):
+        raise HTTPException(status_code=404, detail="image not found")
 
 
 @router.put("/{mid}")
 def save_meta_endpoint(mid: str, meta: Meta):
     storage = get_storage()
+    try:
+        d = storage.image_dir(mid)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="image not found")
+    if not d.exists():
+        raise HTTPException(status_code=404, detail="image not found")
+    meta = meta.model_copy(update={"id": mid})
     storage.save_meta(mid, meta)
     return storage.get_meta(mid).model_dump()
 
 
 @router.delete("/{mid}")
 def delete_image(mid: str):
-    get_storage().delete(mid)
+    try:
+        get_storage().delete(mid)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="image not found")
     return {"ok": True}
