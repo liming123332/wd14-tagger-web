@@ -46,3 +46,24 @@ def test_reclassify_after_quality_change(tmp_path, monkeypatch):
     r = client.post(f"/api/images/{mid}/reclassify")
     assert r.status_code == 200
     assert "long hair" in r.json()["categories"]["head"]["tags"]
+
+
+def test_tag_unknown_mid_returns_404(tmp_path, monkeypatch):
+    client = TestClient(_app(tmp_path, monkeypatch))
+    r = client.post("/api/images/nope/tag", json={"gen_th": 0.35, "char_th": 0.9})
+    assert r.status_code == 404
+
+
+def test_reclassify_preserves_user_edited(tmp_path, monkeypatch):
+    from backend.models import CategoryData
+    client = TestClient(_app(tmp_path, monkeypatch))
+    mid = client.post("/api/images", files={"files": ("a.png", _png(), "image/png")}).json()["ids"][0]
+    client.post(f"/api/images/{mid}/tag", json={"gen_th": 0.35, "char_th": 0.9})
+    # 模拟用户手改 head（user_edited=True），reclassify 应跳过该类不重算
+    storage = deps.get_storage()
+    meta = storage.get_meta(mid)
+    meta.categories["head"] = CategoryData(tags=["custom edited"], phrase="custom edited", user_edited=True)
+    storage.save_meta(mid, meta)
+    r = client.post(f"/api/images/{mid}/reclassify")
+    assert r.status_code == 200
+    assert r.json()["categories"]["head"]["tags"] == ["custom edited"]
