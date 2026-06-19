@@ -65,7 +65,7 @@ async function copyPrompt() {
   <div v-if="meta" style="display:grid;grid-template-columns:minmax(280px,1fr) minmax(0,2fr);gap:16px">
     <div>
       <n-card>
-        <n-image :src="fileUrl(id, meta.image.original)" object-fit="contain" style="max-height:420px;width:100%" />
+        <n-image :src="fileUrl(id, meta.image.thumb)" :preview-src="fileUrl(id, meta.image.original)" object-fit="contain" style="max-height:420px;width:100%;display:block" />
         <div style="font-size:12px;margin-top:8px">
           <div>{{ meta.source_name }}</div>
           <div>{{ meta.image.width }}×{{ meta.image.height }} · {{ meta.model }}</div>
@@ -96,3 +96,18 @@ async function copyPrompt() {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* n-image 默认 inline-flex（shrink-to-fit），img 的 width:100% 因父级宽度
+   依赖内容而失效，退回原图自然宽度（如 4884px）溢出容器；视口变化
+   （开 DevTools / 调整窗口）时图片位置随之偏移。
+   强制 n-image 为 block + 100% 宽，img 才能按容器宽度正确缩放。 */
+:deep(.n-image) {
+  display: block;
+  width: 100%;
+}
+:deep(.n-image img) {
+  max-width: 100%;
+  height: auto;
+}
+</style>
