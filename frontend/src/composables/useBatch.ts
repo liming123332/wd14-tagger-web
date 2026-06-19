@@ -1,5 +1,6 @@
 import { reactive } from 'vue'
 import { uploadOne, startBatch, subscribeBatch } from '../api/client'
+import { useTagger } from './useTagger'
 
 export type Phase = 'idle' | 'uploading' | 'tagging' | 'done' | 'error'
 export interface BatchItem { id: string; name: string; status: 'pending' | 'ok' | 'error'; msg?: string }
@@ -60,7 +61,8 @@ async function start(files: File[], autoTag: boolean, genTh: number, charTh: num
     state.phase = 'done'
     return
   }
-  const b = await startBatch(ids, genTh, charTh)
+  const model = useTagger().state.selected
+  const b = await startBatch(ids, genTh, charTh, model)
   state.batchId = b.batch_id
   state.phase = 'tagging'
   // 同步订阅：消除"start 返回后、subscribe 赋值前"的竞态窗口。

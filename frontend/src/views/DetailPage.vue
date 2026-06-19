@@ -4,7 +4,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { NSpace, NButton, NRadioGroup, NRadioButton, NImage, NCard, NInputNumber, NInput, NDynamicTags, useMessage, NPopconfirm } from 'naive-ui'
 import TagEditor from '../components/TagEditor.vue'
 import { getMeta, saveMeta, tagImage, reclassify, deleteImage, fileUrl, applyCategoryRules } from '../api/client'
+import { useTagger } from '../composables/useTagger'
 import { buildPrompt } from '../detail-utils'
+
+const tagger = useTagger()
 
 const route = useRoute(); const router = useRouter(); const msg = useMessage()
 const id = computed(() => route.params.id as string)
@@ -13,6 +16,8 @@ const mode = ref<'tags' | 'phrase'>('tags')
 const dirty = ref(false)
 const genTh = ref(0.35)
 const charTh = ref(0.9)
+// cl 图（meta.model === 'cl_tagger'）的角色阈值标签单独区分
+const charLabel = computed(() => meta.value?.model === 'cl_tagger' ? '角色名称识别阈值（仅 cl_tagger 生效）' : '角色')
 
 async function load() {
   const cur = id.value
@@ -59,7 +64,7 @@ async function save() {
 }
 
 async function reTag() {
-  meta.value = await tagImage(id.value, genTh.value, charTh.value)
+  meta.value = await tagImage(id.value, genTh.value, charTh.value, tagger.state.selected)
   msg.success('反推完成')
 }
 async function reClassify() {
@@ -86,7 +91,7 @@ async function copyPrompt() {
             名称 <n-input :value="meta.source_name" size="small" @update:value="onName" placeholder="图片名称" style="width:240px" />
           </div>
           <div>{{ meta.image.width }}×{{ meta.image.height }} · {{ meta.model }}</div>
-          <div>通用 <n-input-number v-model:value="genTh" :step="0.05" :min="0" :max="1" size="small" style="width:96px" /> / 角色 <n-input-number v-model:value="charTh" :step="0.05" :min="0" :max="1" size="small" style="width:96px" /></div>
+          <div>通用 <n-input-number v-model:value="genTh" :step="0.05" :min="0" :max="1" size="small" style="width:96px" /> / {{ charLabel }} <n-input-number v-model:value="charTh" :step="0.05" :min="0" :max="1" size="small" style="width:96px" /></div>
           <div style="margin-top:6px">
             <div style="color:#888;margin-bottom:2px">自定义标签（用于图库筛选）</div>
             <n-dynamic-tags :value="meta.tags || []" size="small" @update:value="onTags" />
