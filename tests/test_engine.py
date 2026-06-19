@@ -92,3 +92,48 @@ def test_first_match_wins_overlapping_rules(clf):
     assert "overlap" in res["view"].tags
     assert "overlap" not in res["action"].tags
     assert "overlap" not in res["extras"].tags
+
+
+def test_split_assigns_by_rules(clf):
+    text = "long hair, dress, sitting, indoors, close-up, weird thing"
+    res = clf.split(text)
+    assert res["head"] == ["long hair"]
+    assert res["clothing"] == ["dress"]
+    assert res["action"] == ["sitting"]
+    assert res["scene"] == ["indoors"]
+    assert res["view"] == ["close-up"]
+    assert res["extras"] == ["weird thing"]
+
+
+def test_split_quality_only_matched(clf):
+    # clf 的 quality 模板 = [masterpiece, best quality]
+    # split 只收提示词里实际出现的质量词，不无条件全填模板
+    text = "masterpiece, long hair, random word"
+    res = clf.split(text)
+    assert res["quality"] == ["masterpiece"]
+    assert res["head"] == ["long hair"]
+    assert res["extras"] == ["random word"]
+
+
+def test_split_preserves_order_and_case(clf):
+    res = clf.split("Blue Eyes, Long Hair")
+    assert res["head"] == ["Blue Eyes", "Long Hair"]
+
+
+def test_split_empty_text(clf):
+    res = clf.split("")
+    for k in ("quality", "head", "clothing", "view", "action", "scene", "extras"):
+        assert res[k] == []
+
+
+def test_split_newline_separator(clf):
+    res = clf.split("long hair\ndress")
+    assert res["head"] == ["long hair"]
+    assert res["clothing"] == ["dress"]
+
+
+def test_split_does_not_mutate_classify(clf):
+    # split 不应影响 classify 的 quality 全填模板行为
+    clf.split("masterpiece, long hair")
+    res = clf.classify({})
+    assert res["quality"].tags == ["masterpiece", "best quality"]

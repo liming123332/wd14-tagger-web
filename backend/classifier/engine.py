@@ -89,3 +89,32 @@ class Classifier:
             if not cat.user_edited:
                 cat.phrase = tags_to_phrase(cat.tags, raw_tags)
         return result
+
+    def split(self, text: str) -> dict[str, list[str]]:
+        """把一段提示词文本按当前词表拆到 6 大类 + extras。
+        与 classify 的区别：quality 改为「按匹配」（只收实际出现的质量词），
+        不无条件填充模板；结果无分数、无 phrase，保留原始大小写与出现顺序。"""
+        tokens = [t.strip() for t in (text or "").replace("\n", ",").split(",") if t.strip()]
+        buckets: dict[str, list[str]] = {k: [] for k in self.priority}
+        quality_out: list[str] = []
+        extras: list[str] = []
+        quality_set = {q.lower() for q in self.quality_tags}
+
+        for tok in tokens:
+            t = tok.lower()
+            if t in quality_set:
+                quality_out.append(tok)
+                continue
+            placed = False
+            for cat in self.priority:
+                if self._match(t, self.categories.get(cat, {})):
+                    buckets[cat].append(tok)
+                    placed = True
+                    break
+            if not placed:
+                extras.append(tok)
+
+        result: dict[str, list[str]] = {"quality": quality_out}
+        result.update(buckets)
+        result["extras"] = extras
+        return result
