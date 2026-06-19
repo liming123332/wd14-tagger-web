@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { uploadOne, listImages, randomImages, listTags, applyCategoryRules, tagImage, startBatch, listTaggers, downloadTagger, splitPrompt, listPromptbox, savePromptbox, deletePromptbox } from '../api/client'
+import { uploadOne, listImages, randomImages, listTags, applyCategoryRules, tagImage, startBatch, listTaggers, downloadTagger, splitPrompt, listPromptbox, savePromptbox, deletePromptbox, analyzePromptbox } from '../api/client'
 
 describe('uploadOne', () => {
   beforeEach(() => { vi.unstubAllGlobals() })
@@ -237,5 +237,26 @@ describe('deletePromptbox', () => {
     await deletePromptbox('id1')
     expect(seen[0].url).toBe('/api/promptbox/id1')
     expect(seen[0].method).toBe('DELETE')
+  })
+})
+
+describe('analyzePromptbox', () => {
+  beforeEach(() => { vi.unstubAllGlobals() })
+  it('POST FormData 到 /api/promptbox/analyze 带 model/gen_th/char_th', async () => {
+    const seen: any[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, opts: any) => {
+      seen.push({ url, body: opts.body })
+      return { ok: true, json: async () => ({ items: [] }) } as any
+    }))
+    await analyzePromptbox([new File(['x'], 'a.png')], 'wd3', 0.3, 0.9)
+    expect(seen[0].url).toBe('/api/promptbox/analyze')
+    expect(seen[0].body).toBeInstanceOf(FormData)
+    expect(seen[0].body.get('model')).toBe('wd3')
+    expect(seen[0].body.get('gen_th')).toBe('0.3')
+    expect(seen[0].body.get('char_th')).toBe('0.9')
+  })
+  it('失败时抛错', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, text: async () => 'bad' }) as any))
+    await expect(analyzePromptbox([new File(['x'], 'a.png')], 'wd14', 0.35, 0.9)).rejects.toThrow('bad')
   })
 })

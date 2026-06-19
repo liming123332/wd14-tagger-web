@@ -147,3 +147,34 @@ export function promptboxImageUrl(id: string, name: string) {
   return `${base}/api/promptbox/${id}/image/${name}`
 }
 
+export interface AnalyzedItem {
+  local_id: string
+  original: string
+  thumb: string
+  width: number
+  height: number
+  model: string
+  categories: Record<string, string[]>
+  extras: string[]
+  raw_prompt: string
+}
+
+// 提示词收藏页「上传反推」：图落 promptbox workspace（不进图库），返回每图分类结果。
+// raw_prompt 含全部 6 类 + extras，供工作区卡片预览/复制。
+export async function analyzePromptbox(
+  files: File[], model: string, genTh: number, charTh: number,
+): Promise<{ items: AnalyzedItem[] }> {
+  const fd = new FormData()
+  for (const f of files) fd.append('files', f)
+  fd.append('model', model)
+  fd.append('gen_th', String(genTh))
+  fd.append('char_th', String(charTh))
+  const r = await fetch(`${base}/api/promptbox/analyze`, { method: 'POST', body: fd })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export function promptboxWorkspaceImageUrl(localId: string, name: string) {
+  return `${base}/api/promptbox/workspace/${localId}/image/${name}`
+}
+
