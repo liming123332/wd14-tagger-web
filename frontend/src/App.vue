@@ -7,6 +7,7 @@ const options = [
   { label: '上传', key: 'upload' },
   { label: '图库', key: 'gallery' },
   { label: '随机', key: 'random' },
+  { label: '收藏列表', key: 'collections' },
   { label: '提示词收藏', key: 'promptbox' },
   { label: '设置', key: 'settings' },
 ]
