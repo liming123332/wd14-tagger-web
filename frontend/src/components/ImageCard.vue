@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { NCard, NImage, NButton, NTag, useMessage } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import { fileUrl } from '../api/client'
+import { IconCopy, IconDownload } from '../components/icons'
 
 const props = defineProps<{ item: any }>()
 const router = useRouter()
@@ -37,12 +38,12 @@ function download() {
 </script>
 
 <template>
-  <n-card size="small" hoverable>
+  <n-card size="small" hoverable class="card">
     <div class="thumb" @click="open">
       <n-image :src="fileUrl(item.id, item.thumb)" object-fit="contain" preview-disabled />
       <div class="actions">
-        <n-button size="tiny" circle secondary @click.stop="copy" title="复制完整 prompt">📋</n-button>
-        <n-button size="tiny" circle secondary @click.stop="download" title="下载原图">⬇</n-button>
+        <n-button size="tiny" circle secondary @click.stop="copy" title="复制完整 prompt"><IconCopy/></n-button>
+        <n-button size="tiny" circle secondary @click.stop="download" title="下载原图"><IconDownload/></n-button>
       </div>
     </div>
     <div class="name">{{ item.source_name }}</div>
@@ -63,6 +64,9 @@ function download() {
 }
 .tags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px }
 .tags :deep(.n-tag) { font-size: 11px }
+.card { transition: transform .2s ease, box-shadow .2s ease }
+.card:hover { transform: translateY(-2px) }
+.actions :deep(.n-button) { color: inherit }
 /* 卡片缩略图固定 160px 高，img 填满容器并 contain 居中。height:auto 会让
    竖图按比例撑高溢出卡片（那套只适合详情页自适应大图，不适合固定高度卡片） */
 :deep(.n-image) { display: block; width: 100%; height: 160px }
