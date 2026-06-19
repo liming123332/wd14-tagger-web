@@ -91,3 +91,25 @@ def test_workspace_traversal_guard(tmp_path):
         s.workspace_image_path("ok", "../evil.png")
     with pytest.raises(ValueError):
         s.save_workspace_image("..", Image.new("RGB", (2, 2)), "a.png")
+
+
+def test_create_persists_tagger_fields(tmp_path):
+    s = PromptboxStore(tmp_path)
+    it = s.create(title="t", raw_prompt="x", categories={}, extras=[],
+                  image_data=[], model="wd3", gen_threshold=0.4,
+                  char_threshold=0.6, raw_tags={"a": 0.9})
+    again = s.get(it.id)
+    assert again.model == "wd3"
+    assert again.gen_threshold == 0.4
+    assert again.char_threshold == 0.6
+    assert again.raw_tags == {"a": 0.9}
+
+
+def test_update_tagger_fields(tmp_path):
+    s = PromptboxStore(tmp_path)
+    it = s.create(title="t", raw_prompt="x", categories={}, extras=[], image_data=[])
+    s.update(it.id, model="wd3", raw_tags={"b": 0.8}, gen_threshold=0.5)
+    again = s.get(it.id)
+    assert again.model == "wd3"
+    assert again.raw_tags == {"b": 0.8}
+    assert again.gen_threshold == 0.5

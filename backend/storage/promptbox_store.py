@@ -79,7 +79,10 @@ class PromptboxStore:
             p.unlink()
 
     def create(self, *, title: str, raw_prompt: str, categories: dict[str, list[str]],
-               extras: list[str], image_data: list[tuple[str, bytes]]) -> PromptboxItem:
+               extras: list[str], image_data: list[tuple[str, bytes]],
+               model: str = "wd14", gen_threshold: float = 0.35,
+               char_threshold: float = 0.90,
+               raw_tags: dict[str, float] | None = None) -> PromptboxItem:
         item_id = self.new_id()
         now = datetime.now().astimezone().isoformat(timespec="seconds")
         image_names = [self.save_image(item_id, fn, data) for fn, data in image_data]
@@ -87,6 +90,8 @@ class PromptboxStore:
             id=item_id, title=title, raw_prompt=raw_prompt,
             categories=categories, extras=extras,
             image_names=image_names, created_at=now, updated_at=now,
+            model=model, gen_threshold=gen_threshold,
+            char_threshold=char_threshold, raw_tags=raw_tags or {},
         )
         items = self._read_all()
         items.append(item)
@@ -96,7 +101,10 @@ class PromptboxStore:
     def update(self, item_id: str, *, title: str | None = None, raw_prompt: str | None = None,
                categories: dict[str, list[str]] | None = None, extras: list[str] | None = None,
                new_image_data: list[tuple[str, bytes]] | None = None,
-               remove_image_names: list[str] | None = None) -> PromptboxItem:
+               remove_image_names: list[str] | None = None,
+               model: str | None = None, gen_threshold: float | None = None,
+               char_threshold: float | None = None,
+               raw_tags: dict[str, float] | None = None) -> PromptboxItem:
         items = self._read_all()
         for i, it in enumerate(items):
             if it.id == item_id:
@@ -108,6 +116,14 @@ class PromptboxStore:
                     it.categories = categories
                 if extras is not None:
                     it.extras = extras
+                if model is not None:
+                    it.model = model
+                if gen_threshold is not None:
+                    it.gen_threshold = gen_threshold
+                if char_threshold is not None:
+                    it.char_threshold = char_threshold
+                if raw_tags is not None:
+                    it.raw_tags = raw_tags
                 for name in (remove_image_names or []):
                     if name in it.image_names:
                         self.remove_image(item_id, name)
