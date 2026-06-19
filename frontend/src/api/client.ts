@@ -114,6 +114,10 @@ export interface PromptboxItem {
   image_names: string[]
   created_at: string
   updated_at: string
+  model: string
+  gen_threshold: number
+  char_threshold: number
+  raw_tags: Record<string, number>
 }
 
 export async function splitPrompt(text: string): Promise<{ categories: Record<string, string[]>; extras: string[] }> {
@@ -157,6 +161,7 @@ export interface AnalyzedItem {
   categories: Record<string, string[]>
   extras: string[]
   raw_prompt: string
+  raw_tags: Record<string, number>
 }
 
 // 提示词收藏页「上传反推」：图落 promptbox workspace（不进图库），返回每图分类结果。
@@ -176,5 +181,21 @@ export async function analyzePromptbox(
 
 export function promptboxWorkspaceImageUrl(localId: string, name: string) {
   return `${base}/api/promptbox/workspace/${localId}/image/${name}`
+}
+
+// 收藏编辑页「重新反推」：读收藏示例图反推，返回更新后的 item（含新 raw_tags/categories）
+export async function tagPromptbox(id: string, gen_th = 0.35, char_th = 0.9, model = 'wd14') {
+  return fetch(`${base}/api/promptbox/${id}/tag`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ gen_th, char_th, use_char: true, model }),
+  }).then(r => r.json())
+}
+
+// 收藏编辑页「重分类」：keep 里的类保留手改值（复刻图库 user_edited 语义），其余用 raw_tags 重算
+export async function reclassifyPromptbox(id: string, keep: Record<string, string[]>) {
+  return fetch(`${base}/api/promptbox/${id}/reclassify`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ keep }),
+  }).then(r => r.json())
 }
 

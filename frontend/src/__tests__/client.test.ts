@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { uploadOne, listImages, randomImages, listTags, applyCategoryRules, tagImage, startBatch, listTaggers, downloadTagger, splitPrompt, listPromptbox, savePromptbox, deletePromptbox, analyzePromptbox } from '../api/client'
+import { uploadOne, listImages, randomImages, listTags, applyCategoryRules, tagImage, startBatch, listTaggers, downloadTagger, splitPrompt, listPromptbox, savePromptbox, deletePromptbox, analyzePromptbox, tagPromptbox, reclassifyPromptbox } from '../api/client'
 
 describe('uploadOne', () => {
   beforeEach(() => { vi.unstubAllGlobals() })
@@ -258,5 +258,33 @@ describe('analyzePromptbox', () => {
   it('失败时抛错', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, text: async () => 'bad' }) as any))
     await expect(analyzePromptbox([new File(['x'], 'a.png')], 'wd14', 0.35, 0.9)).rejects.toThrow('bad')
+  })
+})
+
+describe('tagPromptbox', () => {
+  beforeEach(() => { vi.unstubAllGlobals() })
+  it('POST /api/promptbox/{id}/tag 带 model/gen_th/char_th/use_char', async () => {
+    const seen: any[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, opts: any) => {
+      seen.push({ url, body: opts.body })
+      return { ok: true, json: async () => ({ id: 'x', model: 'wd3' }) } as any
+    }))
+    await tagPromptbox('id1', 0.3, 0.9, 'wd3')
+    expect(seen[0].url).toBe('/api/promptbox/id1/tag')
+    expect(JSON.parse(seen[0].body)).toMatchObject({ model: 'wd3', gen_th: 0.3, char_th: 0.9, use_char: true })
+  })
+})
+
+describe('reclassifyPromptbox', () => {
+  beforeEach(() => { vi.unstubAllGlobals() })
+  it('POST /api/promptbox/{id}/reclassify 带 keep', async () => {
+    const seen: any[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, opts: any) => {
+      seen.push({ url, body: opts.body })
+      return { ok: true, json: async () => ({ id: 'x' }) } as any
+    }))
+    await reclassifyPromptbox('id1', { head: ['my tag'] })
+    expect(seen[0].url).toBe('/api/promptbox/id1/reclassify')
+    expect(JSON.parse(seen[0].body)).toEqual({ keep: { head: ['my tag'] } })
   })
 })
