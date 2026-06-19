@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NSpace, NButton, NRadioGroup, NRadioButton, NImage, NCard, NInputNumber, NInput, NDynamicTags, useMessage, NPopconfirm } from 'naive-ui'
+import { NSpace, NButton, NRadioGroup, NRadioButton, NImage, NCard, NInputNumber, NInput, NDynamicTags, useMessage, NPopconfirm, NSelect, NTag } from 'naive-ui'
 import TagEditor from '../components/TagEditor.vue'
 import { getMeta, saveMeta, tagImage, reclassify, deleteImage, fileUrl, applyCategoryRules } from '../api/client'
 import { useTagger } from '../composables/useTagger'
@@ -16,8 +16,35 @@ const mode = ref<'tags' | 'phrase'>('tags')
 const dirty = ref(false)
 const genTh = ref(0.35)
 const charTh = ref(0.9)
-// cl 图（meta.model === 'cl_tagger'）的角色阈值标签单独区分
-const charLabel = computed(() => meta.value?.model === 'cl_tagger' ? '角色名称识别阈值（仅 cl_tagger 生效）' : '角色')
+// 详情页独立模型选择：默认=该图当前 meta.model，切换不影响上传页全局选中。
+const localModel = ref('')
+const taggerOptions = computed(() => tagger.state.taggers.map(t => ({
+  label: t.label, value: t.key, downloaded: t.downloaded,
+})))
+// naive-ui NSelect 的 render-label 是 prop（render function），非插槽：同时渲染面板项与 trigger。
+function renderTaggerLabel(option: any) {
+  return h('span', { style: 'display:inline-flex;align-items:center;gap:6px' }, [
+    option.label as any,
+    option.downloaded
+      ? h(NTag, { type: 'success', size: 'small', bordered: false }, { default: () => '已下载' })
+      : h(NTag, { size: 'small', bordered: false }, { default: () => '未下载' }),
+  ])
+}
+const modelDownloaded = computed(() => tagger.isDownloaded(localModel.value))
+onMounted(() => { tagger.refresh() })
+async function doDownload() {
+  try { await tagger.download(localModel.value); msg.success('下载完成') }
+  catch (e: any) { msg.error('下载失败：' + e.message) }
+}
+// charLabel 跟随当前选中模型（localModel）：选 cl_tagger 时提示「仅 cl_tagger 生效」。
+const charLabel = computed(() => localModel.value === 'cl_tagger' ? '角色名称识别阈值（仅 cl_tagger 生效）' : '角色')
+// 用户主动切换模型时按 cl 适配角色阈值（cl→0.6，wd 系→0.9）；
+// load 载入该图 meta 时用 flag 跳过，保留原图记录的阈值不被覆盖。
+let modelChangeFromLoad = false
+watch(localModel, (m) => {
+  if (modelChangeFromLoad) { modelChangeFromLoad = false; return }
+  charTh.value = m === 'cl_tagger' ? 0.6 : 0.9
+})
 
 async function load() {
   const cur = id.value
@@ -26,6 +53,8 @@ async function load() {
   meta.value = m; dirty.value = false
   genTh.value = m.tagger.gen_threshold
   charTh.value = m.tagger.char_threshold
+  modelChangeFromLoad = true
+  localModel.value = m.model
 }
 watch(id, load, { immediate: true })
 
@@ -64,7 +93,7 @@ async function save() {
 }
 
 async function reTag() {
-  meta.value = await tagImage(id.value, genTh.value, charTh.value, tagger.state.selected)
+  meta.value = await tagImage(id.value, genTh.value, charTh.value, localModel.value)
   msg.success('反推完成')
 }
 async function reClassify() {
@@ -91,6 +120,21 @@ async function copyPrompt() {
             名称 <n-input :value="meta.source_name" size="small" @update:value="onName" placeholder="图片名称" style="width:240px" />
           </div>
           <div>{{ meta.image.width }}×{{ meta.image.height }} · {{ meta.model }}</div>
+          <div style="margin-top:6px">
+            <div style="font-size:13px;margin-bottom:4px">反推模型</div>
+            <n-select
+              :value="localModel"
+              :options="taggerOptions"
+              :render-label="renderTaggerLabel"
+              @update:value="(v: string) => localModel = v"
+              size="small"
+              style="max-width:260px"
+            />
+            <div v-if="!modelDownloaded" style="margin-top:4px;display:flex;align-items:center;gap:6px">
+              <span style="font-size:12px;color:#d03050">{{ tagger.state.taggers.find(t=>t.key===localModel)?.label || localModel }} 未下载</span>
+              <n-button size="tiny" :loading="tagger.state.downloading===localModel" @click="doDownload">下载</n-button>
+            </div>
+          </div>
           <div>通用 <n-input-number v-model:value="genTh" :step="0.05" :min="0" :max="1" size="small" style="width:96px" /> / {{ charLabel }} <n-input-number v-model:value="charTh" :step="0.05" :min="0" :max="1" size="small" style="width:96px" /></div>
           <div style="margin-top:6px">
             <div style="color:#888;margin-bottom:2px">自定义标签（用于图库筛选）</div>
