@@ -16,7 +16,7 @@ def _app(tmp_path, monkeypatch):
     monkeypatch.setattr("backend.config.settings.MODELS_DIR", tmp_path / "models")
     deps.get_storage.cache_clear()
     deps.get_classifier.cache_clear()
-    monkeypatch.setattr(deps, "get_tagger", lambda: FakeTagger())
+    monkeypatch.setattr(deps, "get_tagger", lambda model="wd14": FakeTagger())
     return create_app()
 
 
@@ -54,6 +54,7 @@ def test_batch_runs_all(tmp_path, monkeypatch):
         # 验证已落库
         meta = client.get(f"/api/images/{ids[0]}").json()
         assert "long hair" in meta["categories"]["head"]["tags"]
+        assert meta["model"] == "wd14"
 
 
 def test_batch_single_failure_does_not_break(tmp_path, monkeypatch):
@@ -67,7 +68,7 @@ def test_batch_single_failure_does_not_break(tmp_path, monkeypatch):
             return {"long hair": 0.9}
 
     app = _app(tmp_path, monkeypatch)
-    monkeypatch.setattr(deps, "get_tagger", lambda: MixedTagger())
+    monkeypatch.setattr(deps, "get_tagger", lambda model="wd14": MixedTagger())
     with TestClient(app) as client:
         ids = client.post("/api/images", files=[
             ("files", ("a.png", _png(), "image/png")),

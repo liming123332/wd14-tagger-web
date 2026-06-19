@@ -5,6 +5,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from backend.tasks.queue import get_queue
+from backend.tagger.models_spec import DEFAULT_MODEL_KEY
 
 router = APIRouter(prefix="/api/batch", tags=["batch"])
 
@@ -13,13 +14,14 @@ class BatchRequest(BaseModel):
     ids: list[str]
     gen_th: float = 0.35
     char_th: float = 0.9
+    model: str = DEFAULT_MODEL_KEY
 
 
 @router.post("/tag")
 async def submit_batch(req: BatchRequest):
     if not req.ids:
         raise HTTPException(status_code=400, detail="ids must not be empty")
-    bid = get_queue().submit(req.ids, req.gen_th, req.char_th)
+    bid = get_queue().submit(req.ids, req.gen_th, req.char_th, req.model)
     return {"batch_id": bid}
 
 

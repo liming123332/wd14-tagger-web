@@ -30,19 +30,19 @@ class BatchQueue:
     def __init__(self):
         self._batches: "OrderedDict[str, BatchState]" = OrderedDict()
 
-    def submit(self, ids: list[str], gen_th: float, char_th: float) -> str:
+    def submit(self, ids: list[str], gen_th: float, char_th: float, model: str) -> str:
         batch_id = secrets.token_hex(8)
         state = BatchState(batch_id=batch_id, total=len(ids))
         self._batches[batch_id] = state
         while len(self._batches) > MAX_BATCHES:
             self._batches.popitem(last=False)  # 删最旧，保留最近 N 个
-        asyncio.create_task(self._run(state, ids, gen_th, char_th))
+        asyncio.create_task(self._run(state, ids, gen_th, char_th, model))
         return batch_id
 
-    async def _run(self, state, ids, gen_th, char_th):
+    async def _run(self, state, ids, gen_th, char_th, model):
         storage = deps.get_storage()
         clf = deps.get_classifier()
-        tagger = deps.get_tagger()
+        tagger = deps.get_tagger(model)
         for mid in ids:
             try:
                 meta = storage.get_meta(mid)
@@ -51,6 +51,7 @@ class BatchQueue:
                 meta.tagger.gen_threshold = gen_th
                 meta.tagger.char_threshold = char_th
                 meta.tagger.raw_tags = raw
+                meta.model = model
                 result = clf.classify(raw)
                 meta.categories = {k: v for k, v in result.items() if k != "extras"}
                 meta.extras = result["extras"]

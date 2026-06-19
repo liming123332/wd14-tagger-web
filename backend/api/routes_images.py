@@ -39,12 +39,14 @@ def get_file(mid: str, name: str):
 
 from pydantic import BaseModel
 from backend.deps import get_classifier, get_tagger
+from backend.tagger.models_spec import DEFAULT_MODEL_KEY
 
 
 class TagParams(BaseModel):
     gen_th: float = 0.35
     char_th: float = 0.9
     use_char: bool = True
+    model: str = DEFAULT_MODEL_KEY
 
 
 @router.post("/{mid}/tag")
@@ -57,12 +59,13 @@ def tag_image(mid: str, params: TagParams):
     img_path = storage.file_path(mid, meta.image.original)
     try:
         with Image.open(img_path) as pil:
-            raw = get_tagger().tag_image(pil, params.gen_th, params.char_th, params.use_char)
+            raw = get_tagger(params.model).tag_image(pil, params.gen_th, params.char_th, params.use_char)
     except (UnidentifiedImageError, OSError) as e:
         raise HTTPException(status_code=400, detail=f"bad image {mid}: {e}")
     meta.tagger.gen_threshold = params.gen_th
     meta.tagger.char_threshold = params.char_th
     meta.tagger.raw_tags = raw
+    meta.model = params.model
     result = get_classifier().classify(raw)
     meta.categories = {k: v for k, v in result.items() if k != "extras"}
     meta.extras = result["extras"]
