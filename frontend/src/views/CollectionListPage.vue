@@ -44,6 +44,7 @@ async function doDelete(id: string) {
 }
 
 function goPromptbox() { router.push('/promptbox') }
+function goDetail(id: string) { router.push(`/collections/${id}`) }
 </script>
 
 <template>
@@ -56,7 +57,7 @@ function goPromptbox() { router.push('/promptbox') }
   <n-empty v-if="!filtered.length" :description="keyword ? '没有符合条件的收藏' : '还没有收藏，去提示词收藏页创建'" />
   <n-grid v-else cols="2 600:3 900:4 1200:5" :x-gap="12" :y-gap="12">
     <n-grid-item v-for="it in filtered" :key="it.id">
-      <n-card size="small" hoverable>
+      <n-card size="small" hoverable @click="goDetail(it.id)" style="cursor:pointer">
         <div class="title">{{ it.title || '(未命名)' }}</div>
         <div class="prompt">{{ it.raw_prompt || '(无提示词)' }}</div>
         <n-space v-if="it.image_names.length" style="margin-top:6px">
@@ -71,7 +72,7 @@ function goPromptbox() { router.push('/promptbox') }
         </div>
         <template #action>
           <n-popconfirm @positive-click="doDelete(it.id)">
-            <template #trigger><n-button size="tiny" type="error">删除</n-button></template>
+            <template #trigger><n-button size="tiny" type="error" @click.stop>删除</n-button></template>
             确认删除？
           </n-popconfirm>
         </template>
