@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import UploadPage from './views/UploadPage.vue'
 import GalleryPage from './views/GalleryPage.vue'
 import DetailPage from './views/DetailPage.vue'
+import BatchDetailPage from './views/BatchDetailPage.vue'
 import SettingsPage from './views/SettingsPage.vue'
 
 export const router = createRouter({
@@ -11,6 +12,7 @@ export const router = createRouter({
     { path: '/upload', component: UploadPage },
     { path: '/gallery', component: GalleryPage },
     { path: '/detail/:id', component: DetailPage, props: true },
+    { path: '/batch/:id', component: BatchDetailPage, props: true },
     { path: '/settings', component: SettingsPage },
   ],
 })
