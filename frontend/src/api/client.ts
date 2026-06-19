@@ -131,6 +131,12 @@ export async function listPromptbox(): Promise<PromptboxItem[]> {
   return fetch(`${base}/api/promptbox`).then(r => r.json())
 }
 
+export async function getPromptbox(id: string): Promise<PromptboxItem> {
+  const r = await fetch(`${base}/api/promptbox/${id}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
 export async function savePromptbox(fd: FormData): Promise<PromptboxItem> {
   const r = await fetch(`${base}/api/promptbox`, { method: 'POST', body: fd })
   if (!r.ok) throw new Error(await r.text())
