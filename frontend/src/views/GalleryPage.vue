@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { NGrid, NGridItem, NPagination, NEmpty, NDatePicker, NSelect, NInput } from 'naive-ui'
+import { NCard, NGrid, NGridItem, NPagination, NEmpty, NDatePicker, NSelect, NInput } from 'naive-ui'
 import { listImages, listTags } from '../api/client'
 import ImageCard from '../components/ImageCard.vue'
 
@@ -61,19 +61,21 @@ const hasFilter = () => !!(dateTs.value || selTags.value.length || promptText.va
 </script>
 
 <template>
-  <div style="margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-    <span style="font-size:13px">按日期</span>
-    <n-date-picker v-model:value="dateTs" type="date" clearable size="small"
-                   @update:value="onDate" style="width:160px" />
-    <span style="font-size:13px">按标签</span>
-    <n-select v-model:value="selTags" multiple clearable filterable size="small"
-              :options="tagOptions" placeholder="多选标签（交集筛选）"
-              @update:value="onTags" style="min-width:240px;max-width:360px" />
-    <span style="font-size:13px">按提示词</span>
-    <n-input :value="promptText" placeholder="提示词（逗号或空格分隔，交集）" size="small" clearable
-             @update:value="onPrompt" @keyup.enter="onPromptEnter"
-             style="min-width:240px;max-width:320px" />
-  </div>
+  <n-card size="small" class="filter-bar" style="margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+      <div class="field"><span class="field-label">日期</span>
+        <n-date-picker v-model:value="dateTs" type="date" clearable size="small"
+                       @update:value="onDate" style="width:160px" /></div>
+      <div class="field"><span class="field-label">标签</span>
+        <n-select v-model:value="selTags" multiple clearable filterable size="small"
+                  :options="tagOptions" placeholder="多选标签（交集筛选）"
+                  @update:value="onTags" style="min-width:240px;max-width:360px" /></div>
+      <div class="field"><span class="field-label">提示词</span>
+        <n-input :value="promptText" placeholder="提示词（逗号或空格分隔，交集）" size="small" clearable
+                 @update:value="onPrompt" @keyup.enter="onPromptEnter"
+                 style="min-width:240px;max-width:320px" /></div>
+    </div>
+  </n-card>
   <n-empty v-if="!items.length" :description="hasFilter() ? '没有符合条件的图片' : '还没有图片，先去上传'" />
   <n-grid v-else cols="2 600:3 900:5 1200:6" :x-gap="12" :y-gap="12">
     <n-grid-item v-for="it in items" :key="it.id">
@@ -83,3 +85,8 @@ const hasFilter = () => !!(dateTs.value || selTags.value.length || promptText.va
   <n-pagination v-if="total > size" v-model:page="page" :item-count="total"
                 :page-size="size" @update:page="load" style="margin-top:16px" />
 </template>
+
+<style scoped>
+.field { display: flex; align-items: center; gap: 8px }
+.field-label { font-size: 13px; font-weight: 600; color: var(--n-text-color-3, #6b7280); min-width: 28px }
+</style>
