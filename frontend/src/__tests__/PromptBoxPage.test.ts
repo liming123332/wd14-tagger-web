@@ -58,4 +58,34 @@ describe('PromptBoxPage 工作台', () => {
     expect(w.text()).toContain('long hair')
     expect(w.text()).toContain('dress')
   })
+
+  it('上传反推后另存为收藏携带 raw_tags/model', async () => {
+    const seen: any[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, opts: any) => {
+      if (url === '/api/promptbox/analyze') {
+        return { ok: true, json: async () => ({ items: [{
+          local_id: 'ws1', original: 'original.png', thumb: 'thumb.webp',
+          width: 100, height: 100, model: 'wd3',
+          categories: { head: ['long hair'] }, extras: ['weird'],
+          raw_prompt: 'long hair, weird',
+          raw_tags: { 'long hair': 0.9, 'weird': 0.4 },
+        }] }) } as any
+      }
+      if (url === '/api/promptbox' && opts && opts.method === 'POST') {
+        seen.push(opts.body)
+        return { ok: true, json: async () => ({ id: 'new1' }) } as any
+      }
+      // workspace 原图（workspaceToFile fetch blob）
+      return { ok: true, json: async () => ({}), blob: async () => new Blob([new Uint8Array([1])], { type: 'image/png' }) } as any
+    }))
+    const w = mount(PromptBoxPage, { global: { stubs: { NMenu: true } } })
+    await flushPromises()
+    await (w.vm as any).doAnalyze([new File(['x'], 'a.png')])
+    await flushPromises()
+    await (w.vm as any).saveAsCollection()
+    await flushPromises()
+    expect(seen.length).toBe(1)
+    expect(seen[0].get('raw_tags')).toBe(JSON.stringify({ 'long hair': 0.9, 'weird': 0.4 }))
+    expect(seen[0].get('model')).toBe('wd3')
+  })
 })

@@ -28,6 +28,11 @@ interface WorkspaceItem {
   categories: Record<string, string[]>
   extras: string[]
   raw_prompt: string
+  // 反推元数据（粘贴项无）：另存为收藏时携带，供编辑页重新反推/重分类
+  model?: string
+  gen_threshold?: number
+  char_threshold?: number
+  raw_tags?: Record<string, number>
 }
 
 const items = ref<WorkspaceItem[]>([])
@@ -90,6 +95,8 @@ async function doAnalyze(files: File[]) {
       local_id: it.local_id, original: it.original, thumb: it.thumb,
       categories: { ...emptyCats(), ...it.categories },
       extras: [...it.extras], raw_prompt: it.raw_prompt,
+      model: it.model, gen_threshold: genTh.value, char_threshold: charTh.value,
+      raw_tags: it.raw_tags,
     }))]
     selectedIdx.value = start  // 选中本批第一张
     fileList.value = []
@@ -155,6 +162,11 @@ async function saveAsCollection() {
   fd.append('raw_prompt', it.raw_prompt)
   fd.append('categories', JSON.stringify(it.categories))
   fd.append('extras', JSON.stringify(it.extras))
+  // 携带反推元数据，供编辑页重新反推/重分类（粘贴项回退到当前工具栏值/空）
+  fd.append('model', it.model || localModel.value)
+  fd.append('gen_threshold', String(it.gen_threshold ?? genTh.value))
+  fd.append('char_threshold', String(it.char_threshold ?? charTh.value))
+  fd.append('raw_tags', JSON.stringify(it.raw_tags || {}))
   const file = await workspaceToFile(it)
   if (file) fd.append('files', file)
   try {
