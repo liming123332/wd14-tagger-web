@@ -16,14 +16,20 @@ def get_classifier() -> Classifier:
 
 
 # 多模型实例缓存：key -> OnnxTagger/CLTagger。换模型时各自缓存，最多 8 个 ONNX session。
-_tagger_cache: dict[str, OnnxTagger] = {}
+# 类型注解去掉 OnnxTagger：cl_tagger 现经此入口返回 CLTagger（见 get_tagger 工厂分支）。
+_tagger_cache: dict = {}
 
 
-def get_tagger(model_key: str = DEFAULT_MODEL_KEY) -> OnnxTagger:
+def get_tagger(model_key: str = DEFAULT_MODEL_KEY):
     if model_key not in MODEL_SPECS:
         raise ValueError(f"Unknown tagger: {model_key}")
     if model_key not in _tagger_cache:
-        _tagger_cache[model_key] = OnnxTagger(MODEL_SPECS[model_key])
+        spec = MODEL_SPECS[model_key]
+        if spec.prep == "cl":
+            from backend.tagger.cl_tagger import CLTagger  # 延迟 import 避免循环/加载开销
+            _tagger_cache[model_key] = CLTagger(spec)
+        else:
+            _tagger_cache[model_key] = OnnxTagger(spec)
     return _tagger_cache[model_key]
 
 
