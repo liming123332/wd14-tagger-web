@@ -5,6 +5,7 @@ import DetailPage from './views/DetailPage.vue'
 import BatchDetailPage from './views/BatchDetailPage.vue'
 import RandomPage from './views/RandomPage.vue'
 import CollectionListPage from './views/CollectionListPage.vue'
+import PromptboxDetailPage from './views/PromptboxDetailPage.vue'
 import PromptBoxPage from './views/PromptBoxPage.vue'
 import SettingsPage from './views/SettingsPage.vue'
 
@@ -18,6 +19,7 @@ export const router = createRouter({
     { path: '/detail/:id', component: DetailPage, props: true },
     { path: '/batch/:id', component: BatchDetailPage, props: true },
     { path: '/collections', component: CollectionListPage },
+    { path: '/collections/:id', component: PromptboxDetailPage, props: true },
     { path: '/promptbox', component: PromptBoxPage },
     { path: '/settings', component: SettingsPage },
   ],
