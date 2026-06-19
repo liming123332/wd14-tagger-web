@@ -16,8 +16,8 @@ class ModelSpec:
     tag_source: str        # "csv" | "txt"
 
 
-def _wd(key: str, label: str, folder: str, repo: str) -> ModelSpec:
-    base = f"{_HF}/SmilingWolf/{repo}/resolve/main"
+def _wd(key: str, label: str, folder: str, repo: str, owner: str = "SmilingWolf") -> ModelSpec:
+    base = f"{_HF}/{owner}/{repo}/resolve/main"
     return ModelSpec(
         key=key, label=label, folder=folder,
         files={"model.onnx": f"{base}/model.onnx",
@@ -38,7 +38,7 @@ MODEL_SPECS: dict[str, ModelSpec] = {
                "tags.txt": f"{_HF}/chinoll/deepdanbooru/resolve/main/tags.txt"},
         prep="ddb", tag_source="txt",
     ),
-    "e621": _wd("e621", "E621", "e621", "silveroxides/Z3D-E621-Convnext"),
+    "e621": _wd("e621", "E621", "e621", "Z3D-E621-Convnext", owner="silveroxides"),
 }
 
 DEFAULT_MODEL_KEY = "wd14"

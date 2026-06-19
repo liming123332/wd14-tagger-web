@@ -60,3 +60,10 @@ def test_is_downloaded_false_when_missing(tmp_path):
 def test_is_downloaded_unknown_key_raises(tmp_path):
     with pytest.raises(KeyError):
         is_downloaded("nope", tmp_path)
+
+
+def test_e621_url_uses_silveroxides_owner():
+    spec = MODEL_SPECS["e621"]
+    for url in spec.files.values():
+        assert "silveroxides/Z3D-E621-Convnext" in url
+        assert "SmilingWolf/silveroxides" not in url
