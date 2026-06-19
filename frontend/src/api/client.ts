@@ -105,3 +105,45 @@ export async function downloadTagger(key: string): Promise<{ key: string; downlo
   return fetch(`${base}/api/taggers/${key}/download`, { method: 'POST' }).then(r => r.json())
 }
 
+export interface PromptboxItem {
+  id: string
+  title: string
+  raw_prompt: string
+  categories: Record<string, string[]>
+  extras: string[]
+  image_names: string[]
+  created_at: string
+  updated_at: string
+}
+
+export async function splitPrompt(text: string): Promise<{ categories: Record<string, string[]>; extras: string[] }> {
+  return fetch(`${base}/api/promptbox/split`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  }).then(r => r.json())
+}
+
+export async function listPromptbox(): Promise<PromptboxItem[]> {
+  return fetch(`${base}/api/promptbox`).then(r => r.json())
+}
+
+export async function savePromptbox(fd: FormData): Promise<PromptboxItem> {
+  const r = await fetch(`${base}/api/promptbox`, { method: 'POST', body: fd })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function updatePromptbox(id: string, fd: FormData): Promise<PromptboxItem> {
+  const r = await fetch(`${base}/api/promptbox/${id}`, { method: 'PUT', body: fd })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function deletePromptbox(id: string) {
+  return fetch(`${base}/api/promptbox/${id}`, { method: 'DELETE' }).then(r => r.json())
+}
+
+export function promptboxImageUrl(id: string, name: string) {
+  return `${base}/api/promptbox/${id}/image/${name}`
+}
+

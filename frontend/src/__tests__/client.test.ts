@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { uploadOne, listImages, randomImages, listTags, applyCategoryRules, tagImage, startBatch, listTaggers, downloadTagger } from '../api/client'
+import { uploadOne, listImages, randomImages, listTags, applyCategoryRules, tagImage, startBatch, listTaggers, downloadTagger, splitPrompt, listPromptbox, savePromptbox, deletePromptbox } from '../api/client'
 
 describe('uploadOne', () => {
   beforeEach(() => { vi.unstubAllGlobals() })
@@ -174,5 +174,68 @@ describe('downloadTagger', () => {
     expect(seen[0].url).toBe('/api/taggers/wd3/download')
     expect(seen[0].method).toBe('POST')
     expect(r).toEqual({ key: 'wd3', downloaded: true })
+  })
+})
+
+describe('splitPrompt', () => {
+  beforeEach(() => { vi.unstubAllGlobals() })
+  it('POST /api/promptbox/split 带 text', async () => {
+    const seen: any[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, opts: any) => {
+      seen.push({ url, body: opts.body })
+      return { ok: true, json: async () => ({ categories: { head: ['long hair'] }, extras: [] }) } as any
+    }))
+    const r = await splitPrompt('long hair, dress')
+    expect(seen[0].url).toBe('/api/promptbox/split')
+    expect(JSON.parse(seen[0].body)).toEqual({ text: 'long hair, dress' })
+    expect(r.categories.head).toEqual(['long hair'])
+  })
+})
+
+describe('listPromptbox', () => {
+  beforeEach(() => { vi.unstubAllGlobals() })
+  it('GET /api/promptbox', async () => {
+    const urls: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      urls.push(url)
+      return { ok: true, json: async () => [{ id: 'x', title: 't' }] } as any
+    }))
+    const r = await listPromptbox()
+    expect(urls[0]).toBe('/api/promptbox')
+    expect(r.length).toBe(1)
+  })
+})
+
+describe('savePromptbox', () => {
+  beforeEach(() => { vi.unstubAllGlobals() })
+  it('POST FormData 到 /api/promptbox', async () => {
+    const seen: any[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, opts: any) => {
+      seen.push({ url, body: opts.body })
+      return { ok: true, json: async () => ({ id: 'x' }) } as any
+    }))
+    const fd = new FormData()
+    fd.append('title', 't')
+    await savePromptbox(fd)
+    expect(seen[0].url).toBe('/api/promptbox')
+    expect(seen[0].body).toBeInstanceOf(FormData)
+  })
+  it('失败时抛错', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, text: async () => 'bad' }) as any))
+    await expect(savePromptbox(new FormData())).rejects.toThrow('bad')
+  })
+})
+
+describe('deletePromptbox', () => {
+  beforeEach(() => { vi.unstubAllGlobals() })
+  it('DELETE /api/promptbox/{id}', async () => {
+    const seen: any[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, opts: any) => {
+      seen.push({ url, method: opts.method })
+      return { ok: true, json: async () => ({ ok: true }) } as any
+    }))
+    await deletePromptbox('id1')
+    expect(seen[0].url).toBe('/api/promptbox/id1')
+    expect(seen[0].method).toBe('DELETE')
   })
 })
