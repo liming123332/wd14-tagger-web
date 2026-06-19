@@ -114,7 +114,9 @@ async function copyPrompt() {
   <div v-if="meta" style="display:grid;grid-template-columns:minmax(280px,1fr) minmax(0,2fr);gap:16px">
     <div>
       <n-card>
-        <n-image :src="fileUrl(id, meta.image.thumb)" :preview-src="fileUrl(id, meta.image.original)" object-fit="contain" style="max-height:420px;width:100%;display:block" />
+        <div class="img-wrap">
+          <n-image :src="fileUrl(id, meta.image.thumb)" :preview-src="fileUrl(id, meta.image.original)" object-fit="contain" style="max-height:420px;width:100%;display:block" />
+        </div>
         <div style="font-size:12px;margin-top:8px">
           <div style="margin-bottom:4px">
             名称 <n-input :value="meta.source_name" size="small" @update:value="onName" placeholder="图片名称" style="width:240px" />
@@ -182,5 +184,13 @@ async function copyPrompt() {
 :deep(.n-image img) {
   max-width: 100%;
   height: auto;
+}
+.img-wrap {
+  background: #0f1115;
+  border-radius: 10px;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 </style>

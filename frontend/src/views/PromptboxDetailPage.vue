@@ -192,10 +192,12 @@ async function copyPrompt() {
   <div v-if="item" style="display:grid;grid-template-columns:minmax(280px,1fr) minmax(0,2fr);gap:16px">
     <div>
       <n-card>
-        <n-image v-if="hasImage" :src="promptboxImageUrl(id, item.image_names[0])"
-                 :preview-src="promptboxImageUrl(id, item.image_names[0])"
-                 object-fit="contain" style="max-height:420px;width:100%;display:block" />
-        <div v-else class="no-img">无图片（无法重新反推）</div>
+        <div class="img-wrap">
+          <n-image v-if="hasImage" :src="promptboxImageUrl(id, item.image_names[0])"
+                   :preview-src="promptboxImageUrl(id, item.image_names[0])"
+                   object-fit="contain" style="max-height:420px;width:100%;display:block" />
+          <div v-else class="no-img">无图片（点下方「上传图片」或「重新反推」）</div>
+        </div>
         <div style="font-size:12px;margin-top:8px">
           <div style="margin-bottom:4px">
             标题 <n-input :value="item.title" size="small" @update:value="onName" placeholder="收藏标题" style="width:240px" />
@@ -263,5 +265,13 @@ async function copyPrompt() {
 .no-img {
   height: 200px; display: flex; align-items: center; justify-content: center;
   color: #999; background: #f5f5f5; font-size: 13px; border-radius: 4px;
+}
+.img-wrap {
+  background: #0f1115;
+  border-radius: 10px;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 </style>
