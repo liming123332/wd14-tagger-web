@@ -3,6 +3,9 @@ import yaml
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from backend.config import settings
 from backend.api import routes_config
@@ -15,6 +18,21 @@ def _validate_config() -> None:
         raise RuntimeError("tag_rules.yaml missing 'categories' or 'priority'")
     if not Path(settings.QUALITY_TEMPLATE_PATH).exists():
         raise RuntimeError("quality_template.yaml missing")
+
+
+class SpaStaticFiles(StaticFiles):
+    """单页应用静态托管：磁盘上不存在的非 API 路径回退到 index.html，
+    以支持 /upload、/gallery、/batch/:id 等前端路由的直接访问与刷新。
+    /api 前缀的未知路径保持原 404 语义，不被吞成 html。
+    """
+
+    async def get_response(self, path: str, scope):
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as ex:
+            if ex.status_code == 404 and not path.startswith("api"):
+                return FileResponse(str(Path(self.directory) / "index.html"))
+            raise
 
 
 def create_app() -> FastAPI:
@@ -32,8 +50,7 @@ def create_app() -> FastAPI:
     # 生产：托管前端构建产物（mount "/" 必须在所有 /api 路由 include 之后，避免拦截 API）
     dist = settings.ROOT / "frontend" / "dist"
     if dist.exists():
-        from fastapi.staticfiles import StaticFiles
-        app.mount("/", StaticFiles(directory=str(dist), html=True), name="frontend")
+        app.mount("/", SpaStaticFiles(directory=str(dist), html=True), name="frontend")
     return app
 
 
