@@ -4,6 +4,13 @@
 
 ## 快速开始
 
+### 一键启动脚本（Windows）
+
+首次按下方「后端 / 前端」装好依赖后，双击即可启动：
+
+- `start.bat` — 生产模式：单进程 uvicorn 托管已构建前端，访问 http://127.0.0.1:8000（改前端后需重新 `npm run build`）。
+- `dev.bat` — 开发模式：分别启动 vite（5173，热更新）与 uvicorn（8000，`--reload`），访问 http://localhost:5173，`/api` 自动代理到 8000。
+
 ### 后端
 ```bash
 cd wd14-tagger-web
