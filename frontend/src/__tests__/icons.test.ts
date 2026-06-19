@@ -23,4 +23,11 @@ describe('icons', () => {
     expect(wrap(IconMoon).find('svg').exists()).toBe(true)
     expect(wrap(IconMonitor).find('svg').exists()).toBe(true)
   })
+  it('同一图标多次渲染互不干扰（每次新建 VNode，不复用）', () => {
+    const N = 5
+    const wrapper = mount({
+      render: () => h('div', Array.from({ length: N }, () => h(IconCopy))),
+    })
+    expect(wrapper.findAll('svg').length).toBe(N)
+  })
 })
