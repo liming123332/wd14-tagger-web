@@ -63,10 +63,11 @@ async function start(files: File[], autoTag: boolean, genTh: number, charTh: num
   const b = await startBatch(ids, genTh, charTh)
   state.batchId = b.batch_id
   state.phase = 'tagging'
-  // 推迟到下一微任务再订阅，确保 start() 返回后调用方先读到 phase='tagging'，
-  // 其后才触发 SSE 回调（与 EventSource 真实异步语义一致）。
-  Promise.resolve().then(() => {
-    es = subscribeBatch(b.batch_id, (ev) => {
+  // 同步订阅：消除"start 返回后、subscribe 赋值前"的竞态窗口。
+  // SSE 回调（onmessage/onerror）由网络层异步触发，本同步赋值不与之冲突。
+  es = subscribeBatch(
+    b.batch_id,
+    (ev) => {
       if (ev.type === 'progress') {
         state.tagged++
         state.current = ev.current || ''
@@ -81,8 +82,17 @@ async function start(files: File[], autoTag: boolean, genTh: number, charTh: num
         es?.close()
         es = null
       }
-    })
-  })
+    },
+    () => {
+      // 连接断开（网络抖动/后端重启）：避免 phase 永久卡 tagging 导致死锁。
+      // 守卫 phase==='tagging'，避免覆盖 done 正常结束。
+      if (state.phase === 'tagging') {
+        state.phase = 'error'
+        es?.close()
+        es = null
+      }
+    },
+  )
 }
 
 export function useBatch() {

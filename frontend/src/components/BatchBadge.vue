@@ -13,7 +13,7 @@ function toDetail() { if (state.batchId) router.push('/batch/' + state.batchId) 
 <template>
   <n-tag v-if="visible()" data-testid="badge"
          :type="state.phase === 'done' ? 'success' : 'info'"
-         size="small" checkable
+         size="small"
          :style="{ cursor: state.batchId ? 'pointer' : 'default' }"
          @click="toDetail">
     <template v-if="state.phase === 'done'">✓ 完成 {{ state.total }}</template>

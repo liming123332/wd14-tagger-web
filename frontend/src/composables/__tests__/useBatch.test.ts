@@ -53,10 +53,11 @@ describe('useBatch', () => {
     vi.mocked(client.uploadOne).mockResolvedValue({ id: 'a' })
     vi.mocked(client.startBatch).mockResolvedValue({ batch_id: 'B1' })
     vi.mocked(client.subscribeBatch).mockImplementation((_id: string, onEvent: (e: any) => void) => {
-      queueMicrotask(() => {
+      // 真实 EventSource.onmessage 是宏任务级网络回调，用 setTimeout 如实模拟
+      setTimeout(() => {
         onEvent({ type: 'progress', done: 1, total: 1, current: 'x.png', id: 'a' })
         onEvent({ type: 'done', ok: 1, failed: 0 })
-      })
+      }, 0)
       return { close: vi.fn() } as any
     })
     const { state, start, isBusy } = useBatch()
@@ -73,10 +74,10 @@ describe('useBatch', () => {
     vi.mocked(client.uploadOne).mockResolvedValue({ id: 'a' })
     vi.mocked(client.startBatch).mockResolvedValue({ batch_id: 'B1' })
     vi.mocked(client.subscribeBatch).mockImplementation((_id, onEvent: any) => {
-      queueMicrotask(() => {
+      setTimeout(() => {
         onEvent({ type: 'error', id: 'a', message: 'timeout' })
         onEvent({ type: 'done', ok: 0, failed: 1 })
-      })
+      }, 0)
       return { close: vi.fn() } as any
     })
     const { state, start } = useBatch()
@@ -85,6 +86,27 @@ describe('useBatch', () => {
     expect(state.failed).toBe(1)
     expect(state.items[0].status).toBe('error')
     expect(state.items[0].msg).toBe('timeout')
+  })
+
+  it('SSE 连接断开（onDisconnect）不死锁：phase 由 tagging→error，isBusy→false', async () => {
+    vi.mocked(client.uploadOne).mockResolvedValue({ id: 'a' })
+    vi.mocked(client.startBatch).mockResolvedValue({ batch_id: 'B1' })
+    let capturedDisconnect: (() => void) | null = null
+    vi.mocked(client.subscribeBatch).mockImplementation(
+      (_id: string, _onEvent: (e: any) => void, onDisconnect?: () => void) => {
+        capturedDisconnect = onDisconnect ?? null
+        return { close: vi.fn() } as any
+      },
+    )
+    const { state, start, isBusy } = useBatch()
+    await start([new File([], 'x.png')], true, 0.35, 0.9)
+    expect(state.phase).toBe('tagging')
+    expect(isBusy()).toBe(true)
+    expect(capturedDisconnect).not.toBeNull()
+    // 模拟网络断开/后端重启触发 onerror → onDisconnect
+    capturedDisconnect!()
+    expect(state.phase).toBe('error')
+    expect(isBusy()).toBe(false)
   })
 
   it('reset 清空所有字段', async () => {

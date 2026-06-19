@@ -53,14 +53,18 @@ export async function startBatch(ids: string[], gen_th = 0.35, char_th = 0.9) {
   }).then(r => r.json())
 }
 
-export function subscribeBatch(batchId: string, onEvent: (e: any) => void) {
+export function subscribeBatch(
+  batchId: string,
+  onEvent: (e: any) => void,
+  onDisconnect?: () => void,
+) {
   const es = new EventSource(`${base}/api/batch/${batchId}/events`)
   es.onmessage = (m) => {
     const data = JSON.parse(m.data)
     onEvent(data)
     if (data.type === 'done') es.close()
   }
-  es.onerror = () => es.close()
+  es.onerror = () => { es.close(); onDisconnect?.() }
   return es
 }
 
