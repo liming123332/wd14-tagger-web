@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   NSpace, NButton, NRadioGroup, NRadioButton, NImage, NCard,
-  NInputNumber, NInput, useMessage, NPopconfirm, NSelect, NTag, NEmpty,
+  NInputNumber, NInput, useMessage, NPopconfirm, NSelect, NTag, NEmpty, NUpload,
 } from 'naive-ui'
 import TagEditor from '../components/TagEditor.vue'
 import {
@@ -121,17 +121,38 @@ function toCatsOut(): Record<string, string[]> {
   return out
 }
 
-async function save() {
-  if (!item.value) return
+// PUT FormData：save（仅字段）与 uploadImage（字段+图）共用。
+// files 走 update 端点的 new_image_data，后端只追加存图、不反推。
+function buildFd(files?: File[]): FormData {
   const fd = new FormData()
-  fd.append('title', item.value.title)
-  fd.append('raw_prompt', item.value.raw_prompt)
+  fd.append('title', item.value!.title)
+  fd.append('raw_prompt', item.value!.raw_prompt)
   fd.append('categories', JSON.stringify(toCatsOut()))
   fd.append('extras', JSON.stringify(extrasView.value.tags))
+  if (files) for (const f of files) fd.append('files', f, f.name)
+  return fd
+}
+
+async function save() {
+  if (!item.value) return
   try {
-    const updated = await updatePromptbox(id.value, fd)
+    const updated = await updatePromptbox(id.value, buildFd())
     fromItem(updated); dirty.value = false; msg.success('已保存')
   } catch (e: any) { msg.error('保存失败：' + e.message) }
+}
+
+// 上传示例图：update 带 files 追加存图，不自动反推（想反推手动点「重新反推」）。
+async function uploadImage(file: File) {
+  if (!item.value) return
+  try {
+    const updated = await updatePromptbox(id.value, buildFd([file]))
+    fromItem(updated); msg.success('图片已上传（未自动反推）')
+  } catch (e: any) { msg.error('上传失败：' + e.message) }
+}
+// NUpload custom-request 适配：取原生 File 调 uploadImage
+function onUploadReq({ file }: any) {
+  const f = (file as any)?.file as File | undefined
+  if (f) uploadImage(f)
 }
 
 const hasImage = computed(() => !!item.value && item.value.image_names.length > 0)
@@ -192,6 +213,9 @@ async function copyPrompt() {
           <div>通用 <n-input-number v-model:value="genTh" :step="0.05" :min="0" :max="1" size="small" style="width:96px" /> / {{ charLabel }} <n-input-number v-model:value="charTh" :step="0.05" :min="0" :max="1" size="small" style="width:96px" /></div>
         </div>
         <n-space vertical style="margin-top:8px">
+          <n-upload :show-file-list="false" :max="1" accept="image/*" :custom-request="onUploadReq">
+            <n-button size="small">＋ 上传图片</n-button>
+          </n-upload>
           <n-button size="small" :disabled="!hasImage" @click="reTag">重新反推</n-button>
           <n-button size="small" :disabled="!hasRawTags" @click="reClassify">重分类</n-button>
           <n-button size="small" @click="copyPrompt">复制完整 prompt</n-button>

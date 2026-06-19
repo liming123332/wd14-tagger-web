@@ -44,7 +44,7 @@ describe('PromptboxDetailPage', () => {
       if (url === '/api/promptbox/c1') return { ok: true, json: async () => ITEM } as any
       return { ok: true, json: async () => ({}) } as any
     }))
-    const w = mount(PromptboxDetailPage, { global: { stubs: { NImage: true } } })
+    const w = mount(PromptboxDetailPage, { global: { stubs: { NImage: true, NUpload: true } } })
     await flushPromises()
     // title 在 NInput 的 value（不在 textContent），单独查 input
     expect(w.findAll('input').some(i => (i.element as HTMLInputElement).value === '测试收藏')).toBe(true)
@@ -63,7 +63,7 @@ describe('PromptboxDetailPage', () => {
       if (url === '/api/promptbox/c1') return { ok: true, json: async () => ITEM } as any
       return { ok: true, json: async () => ({}) } as any
     }))
-    const w = mount(PromptboxDetailPage, { global: { stubs: { NImage: true } } })
+    const w = mount(PromptboxDetailPage, { global: { stubs: { NImage: true, NUpload: true } } })
     await flushPromises()
     await (w.vm as any).save()
     await flushPromises()
@@ -79,7 +79,7 @@ describe('PromptboxDetailPage', () => {
       if (url === '/api/promptbox/c1') return { ok: true, json: async () => ({ ...ITEM, image_names: [] }) } as any
       return { ok: true, json: async () => ({}) } as any
     }))
-    const w = mount(PromptboxDetailPage, { global: { stubs: { NImage: true } } })
+    const w = mount(PromptboxDetailPage, { global: { stubs: { NImage: true, NUpload: true } } })
     await flushPromises()
     const reTagBtn = w.findAll('button').find(b => b.text().includes('重新反推'))
     expect(reTagBtn).toBeTruthy()
@@ -96,12 +96,33 @@ describe('PromptboxDetailPage', () => {
       if (url === '/api/promptbox/c1') return { ok: true, json: async () => ITEM } as any
       return { ok: true, json: async () => ({}) } as any
     }))
-    const w = mount(PromptboxDetailPage, { global: { stubs: { NImage: true } } })
+    const w = mount(PromptboxDetailPage, { global: { stubs: { NImage: true, NUpload: true } } })
     await flushPromises()
     // 模拟手改 head 类
     ;(w.vm as any).setCat('head', { tags: ['my tag'], phrase: 'my tag', user_edited: true })
     await (w.vm as any).reClassify()
     await flushPromises()
     expect(seen[0].keep).toEqual({ head: ['my tag'] })
+  })
+
+  it('上传图片：update PUT 带 files，不触发 /tag（不自动反推）', async () => {
+    const puts: any[] = []
+    let tagged = false
+    vi.stubGlobal('fetch', vi.fn(async (url: string, opts?: any) => {
+      if (url === '/api/promptbox/c1' && opts && opts.method === 'PUT') {
+        puts.push(opts.body)
+        return { ok: true, json: async () => ({ ...ITEM, image_names: ['new.png'] }) } as any
+      }
+      if (url === '/api/promptbox/c1/tag') { tagged = true; return { ok: true, json: async () => ITEM } as any }
+      if (url === '/api/promptbox/c1') return { ok: true, json: async () => ITEM } as any
+      return { ok: true, json: async () => ({}) } as any
+    }))
+    const w = mount(PromptboxDetailPage, { global: { stubs: { NImage: true, NUpload: true } } })
+    await flushPromises()
+    await (w.vm as any).uploadImage(new File(['x'], 'up.png', { type: 'image/png' }))
+    await flushPromises()
+    expect(puts.length).toBe(1)
+    expect(puts[0].get('files')).toBeTruthy()
+    expect(tagged).toBe(false)
   })
 })
