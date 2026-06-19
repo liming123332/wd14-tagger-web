@@ -84,7 +84,9 @@ function cycleTheme() {
             <div class="content">
               <router-view v-slot="{ Component }">
                 <transition name="fade" mode="out-in">
-                  <component :is="Component" />
+                  <div :key="route.path" class="route-view">
+                    <component :is="Component" />
+                  </div>
                 </transition>
               </router-view>
             </div>

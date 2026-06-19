@@ -38,7 +38,7 @@ function download() {
 </script>
 
 <template>
-  <n-card size="small" hoverable class="card">
+  <n-card size="small" class="card">
     <div class="thumb" @click="open">
       <n-image :src="fileUrl(item.id, item.thumb)" object-fit="contain" preview-disabled />
       <div class="actions">
@@ -65,7 +65,7 @@ function download() {
 .tags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px }
 .tags :deep(.n-tag) { font-size: 11px }
 .card { transition: transform .2s ease, box-shadow .2s ease }
-.card:hover { transform: translateY(-2px) }
+.card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12) }
 .actions :deep(.n-button) { color: inherit }
 /* 卡片缩略图固定 160px 高，img 填满容器并 contain 居中。height:auto 会让
    竖图按比例撑高溢出卡片（那套只适合详情页自适应大图，不适合固定高度卡片） */

@@ -50,4 +50,5 @@ export const darkOverrides: GlobalThemeOverrides = {
   Input: { borderRadius: '6px' },
   Select: { peers: { InternalSelection: { borderRadius: '6px' } } },
   Menu: { itemHeight: '40px', color: '#111317', itemTextColor: '#9ca3af', itemTextColorActive: '#e5e7eb', itemColorActive: '#262a32' },
+  Layout: { siderColor: '#111317', siderBorderColor: '#2a2e37' },
 }
