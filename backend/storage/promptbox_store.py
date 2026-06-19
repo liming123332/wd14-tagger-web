@@ -4,6 +4,7 @@ import secrets
 import shutil
 from datetime import datetime
 from pathlib import Path
+from PIL import Image
 
 from backend.models import PromptboxItem
 from backend.config import settings
@@ -129,3 +130,47 @@ class PromptboxStore:
         if "/" in name or "\\" in name:
             raise ValueError("bad image name")
         return self._item_dir(item_id) / name
+
+    # ---- 反推工作区（临时图，与收藏示例图/图库均隔离）----
+    # 提示词收藏页「上传反推」专用：图只落 workspace/<local_id>/，不进图库 data/images/，
+    # 也不计入收藏 items.json。用户「另存为收藏」时才决定是否升级为正式示例图。
+
+    def workspace_root(self) -> Path:
+        d = self.data_root / "workspace"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    def _ws_dir(self, local_id: str) -> Path:
+        # 防穿越：与 _item_dir 同策略
+        if local_id in ("", ".", "..") or "/" in local_id or "\\" in local_id:
+            raise ValueError("bad workspace id")
+        return self.workspace_root() / local_id
+
+    @staticmethod
+    def _ext_for(source_name: str) -> str:
+        low = source_name.lower()
+        for ext in (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"):
+            if low.endswith(ext):
+                return ext
+        return ".png"
+
+    def save_workspace_image(self, local_id: str, pil: Image.Image,
+                             source_name: str) -> tuple[str, str, int, int]:
+        """存原图 + 缩略图到 workspace/<local_id>/，返回 (original_name, thumb_name, w, h)。
+        缩略图逻辑与 Storage._make_thumb 一致（THUMB_MAX_SIZE=400, webp q85）。"""
+        d = self._ws_dir(local_id)
+        d.mkdir(parents=True, exist_ok=True)
+        ext = self._ext_for(source_name)
+        original_name = "original" + ext
+        pil.save(d / original_name)
+        rgb = pil.convert("RGB")
+        w, h = rgb.size
+        scale = min(1.0, settings.THUMB_MAX_SIZE / max(w, h))
+        tw, th = max(1, int(w * scale)), max(1, int(h * scale))
+        rgb.resize((tw, th)).save(d / "thumb.webp", format="WEBP", quality=85)
+        return original_name, "thumb.webp", w, h
+
+    def workspace_image_path(self, local_id: str, name: str) -> Path:
+        if "/" in name or "\\" in name:
+            raise ValueError("bad image name")
+        return self._ws_dir(local_id) / name

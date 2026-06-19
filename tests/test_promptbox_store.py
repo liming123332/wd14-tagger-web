@@ -66,3 +66,28 @@ def test_traversal_guard(tmp_path):
         s.image_path("..", "x.png")
     with pytest.raises(ValueError):
         s.image_path("ok", "../evil.png")
+
+
+def test_workspace_save_and_path(tmp_path):
+    from PIL import Image
+    s = PromptboxStore(tmp_path)
+    pil = Image.new("RGB", (40, 60))
+    orig, thumb, w, h = s.save_workspace_image("ws-1", pil, "a.png")
+    assert orig == "original.png"
+    assert thumb == "thumb.webp"
+    assert (w, h) == (40, 60)
+    assert s.workspace_image_path("ws-1", orig).exists()
+    assert s.workspace_image_path("ws-1", thumb).exists()
+    # 缩略图是 webp
+    assert s.workspace_image_path("ws-1", thumb).suffix == ".webp"
+
+
+def test_workspace_traversal_guard(tmp_path):
+    from PIL import Image
+    s = PromptboxStore(tmp_path)
+    with pytest.raises(ValueError):
+        s.workspace_image_path("..", "x.png")
+    with pytest.raises(ValueError):
+        s.workspace_image_path("ok", "../evil.png")
+    with pytest.raises(ValueError):
+        s.save_workspace_image("..", Image.new("RGB", (2, 2)), "a.png")
