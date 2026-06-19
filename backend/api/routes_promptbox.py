@@ -7,7 +7,7 @@ from PIL import Image, UnidentifiedImageError
 
 from backend.deps import get_classifier, get_tagger, get_promptbox_store
 from backend.tagger.models_spec import DEFAULT_MODEL_KEY
-from backend.models import PROMPT_ORDER
+from backend.models import PROMPT_ORDER, CategoryData
 
 router = APIRouter(prefix="/api/promptbox", tags=["promptbox"])
 
@@ -38,6 +38,10 @@ def create_item(
     raw_prompt: str = Form(""),
     categories: str = Form("{}"),
     extras: str = Form("[]"),
+    model: str = Form(DEFAULT_MODEL_KEY),
+    gen_threshold: float = Form(0.35),
+    char_threshold: float = Form(0.90),
+    raw_tags: str = Form("{}"),
     files: list[UploadFile] = File(default_factory=list),
 ):
     store = get_promptbox_store()
@@ -46,6 +50,8 @@ def create_item(
         title=title, raw_prompt=raw_prompt,
         categories=_parse_json(categories, {}), extras=_parse_json(extras, []),
         image_data=image_data,
+        model=model, gen_threshold=gen_threshold, char_threshold=char_threshold,
+        raw_tags=_parse_json(raw_tags, {}),
     )
     return item.model_dump()
 
@@ -88,6 +94,7 @@ def analyze(
             "width": w, "height": h, "model": model,
             "categories": categories, "extras": extras,
             "raw_prompt": ", ".join(all_tags),
+            "raw_tags": raw,
         })
     return {"items": items}
 
@@ -103,6 +110,66 @@ def get_workspace_image(local_id: str, name: str):
         raise HTTPException(status_code=404, detail="not found")
     ctype = mimetypes.guess_type(str(p))[0] or "application/octet-stream"
     return FileResponse(p, media_type=ctype)
+
+
+class TagParams(BaseModel):
+    gen_th: float = 0.35
+    char_th: float = 0.9
+    use_char: bool = True
+    model: str = DEFAULT_MODEL_KEY
+
+
+@router.post("/{item_id}/tag")
+def tag_item(item_id: str, params: TagParams):
+    # 重新反推：读收藏示例图 image_names[0] → tagger → 分类 → 更新 model/阈值/raw_tags/categories/extras
+    store = get_promptbox_store()
+    it = store.get(item_id)
+    if it is None:
+        raise HTTPException(status_code=404, detail="not found")
+    if not it.image_names:
+        raise HTTPException(status_code=400, detail="no image to tag")
+    img_path = store.image_path(item_id, it.image_names[0])
+    try:
+        with Image.open(img_path) as pil:
+            raw = get_tagger(params.model).tag_image(
+                pil, params.gen_th, params.char_th, params.use_char)
+    except (UnidentifiedImageError, OSError) as e:
+        raise HTTPException(status_code=400, detail=f"bad image: {e}")
+    result = get_classifier().classify(raw)
+    updated = store.update(
+        item_id, model=params.model, gen_threshold=params.gen_th,
+        char_threshold=params.char_th, raw_tags=raw,
+        categories={k: list(v.tags) for k, v in result.items() if k != "extras"},
+        extras=list(result["extras"].tags),
+    )
+    return updated.model_dump()
+
+
+class ReclassifyRequest(BaseModel):
+    # keep: 本次手改过的类 → 作 user_edited=True，重分类时保留（复刻图库 user_edited 语义）
+    keep: dict[str, list[str]] = {}
+
+
+@router.post("/{item_id}/reclassify")
+def reclassify_item(item_id: str, body: ReclassifyRequest):
+    # 重分类：用已存 raw_tags 重跑分类器；keep 里的类保留手改值，其余重算
+    store = get_promptbox_store()
+    it = store.get(item_id)
+    if it is None:
+        raise HTTPException(status_code=404, detail="not found")
+    if not it.raw_tags:
+        raise HTTPException(status_code=400, detail="no raw_tags; tag first")
+    existing = {
+        k: CategoryData(tags=list(tags), phrase=", ".join(tags), user_edited=True)
+        for k, tags in body.keep.items()
+    }
+    result = get_classifier().classify(it.raw_tags, existing=existing)
+    updated = store.update(
+        item_id,
+        categories={k: list(v.tags) for k, v in result.items() if k != "extras"},
+        extras=list(result["extras"].tags),
+    )
+    return updated.model_dump()
 
 
 @router.get("/{item_id}")
@@ -121,6 +188,10 @@ def update_item(
     categories: str = Form(None),
     extras: str = Form(None),
     remove_image_names: str = Form(None),
+    model: str = Form(None),
+    gen_threshold: float = Form(None),
+    char_threshold: float = Form(None),
+    raw_tags: str = Form(None),
     files: list[UploadFile] = File(default_factory=list),
 ):
     store = get_promptbox_store()
@@ -133,6 +204,8 @@ def update_item(
             categories=_parse_json(categories, None), extras=_parse_json(extras, None),
             new_image_data=image_data,
             remove_image_names=_parse_json(remove_image_names, None),
+            model=model, gen_threshold=gen_threshold, char_threshold=char_threshold,
+            raw_tags=_parse_json(raw_tags, None),
         )
     except KeyError:
         raise HTTPException(status_code=404, detail="not found")

@@ -115,3 +115,74 @@ def test_workspace_image_404(tmp_path, monkeypatch):
     assert client.get(
         "/api/promptbox/workspace/nope/image/thumb.webp"
     ).status_code == 404
+
+
+def _tag_app(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch)
+    monkeypatch.setattr("backend.api.routes_promptbox.get_tagger",
+                        lambda model="wd14": _FakeTagger())
+    return app
+
+
+def test_tag_endpoint_classifies(tmp_path, monkeypatch):
+    client = TestClient(_tag_app(tmp_path, monkeypatch))
+    item = client.post("/api/promptbox", data={
+        "title": "t", "raw_prompt": "x", "categories": "{}", "extras": "[]",
+    }, files=[("files", ("a.png", _png(), "image/png"))]).json()
+    r = client.post(f"/api/promptbox/{item['id']}/tag",
+                    json={"gen_th": 0.35, "char_th": 0.9})
+    assert r.status_code == 200
+    d = r.json()
+    assert "long hair" in d["categories"]["head"]
+    assert "dress" in d["categories"]["clothing"]
+    assert "unknown thing" in d["extras"]
+    assert d["model"] == "wd14"
+    assert d["raw_tags"]["long hair"] == 0.9
+
+
+def test_tag_endpoint_no_image_returns_400(tmp_path, monkeypatch):
+    client = TestClient(_tag_app(tmp_path, monkeypatch))
+    item = client.post("/api/promptbox", data={
+        "title": "t", "raw_prompt": "x", "categories": "{}", "extras": "[]",
+    }).json()
+    assert client.post(f"/api/promptbox/{item['id']}/tag",
+                       json={"gen_th": 0.35, "char_th": 0.9}).status_code == 400
+
+
+def test_reclassify_endpoint_keeps_user_edited(tmp_path, monkeypatch):
+    client = TestClient(_tag_app(tmp_path, monkeypatch))
+    item = client.post("/api/promptbox", data={
+        "title": "t", "raw_prompt": "x", "categories": "{}", "extras": "[]",
+    }, files=[("files", ("a.png", _png(), "image/png"))]).json()
+    client.post(f"/api/promptbox/{item['id']}/tag", json={"gen_th": 0.35, "char_th": 0.9})
+    r = client.post(f"/api/promptbox/{item['id']}/reclassify",
+                    json={"keep": {"head": ["my custom tag"]}})
+    assert r.status_code == 200
+    assert r.json()["categories"]["head"] == ["my custom tag"]
+
+
+def test_reclassify_without_raw_tags_returns_400(tmp_path, monkeypatch):
+    client = TestClient(_tag_app(tmp_path, monkeypatch))
+    item = client.post("/api/promptbox", data={
+        "title": "t", "raw_prompt": "x", "categories": "{}", "extras": "[]",
+    }).json()
+    assert client.post(f"/api/promptbox/{item['id']}/reclassify",
+                       json={"keep": {}}).status_code == 400
+
+
+def test_tag_unknown_returns_404(tmp_path, monkeypatch):
+    client = TestClient(_tag_app(tmp_path, monkeypatch))
+    assert client.post("/api/promptbox/nope/tag",
+                       json={"gen_th": 0.35, "char_th": 0.9}).status_code == 404
+
+
+def test_create_persists_tagger_form_fields(tmp_path, monkeypatch):
+    client = TestClient(_app(tmp_path, monkeypatch))
+    item = client.post("/api/promptbox", data={
+        "title": "t", "raw_prompt": "x", "categories": "{}", "extras": "[]",
+        "model": "wd3", "gen_threshold": "0.4", "char_threshold": "0.6",
+        "raw_tags": '{"a": 0.9}',
+    }).json()
+    assert item["model"] == "wd3"
+    assert item["gen_threshold"] == 0.4
+    assert item["raw_tags"]["a"] == 0.9
