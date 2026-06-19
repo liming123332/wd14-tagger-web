@@ -80,3 +80,38 @@ def test_get_image(tmp_path, monkeypatch):
 def test_get_unknown_returns_404(tmp_path, monkeypatch):
     client = TestClient(_app(tmp_path, monkeypatch))
     assert client.get("/api/promptbox/nope").status_code == 404
+
+
+class _FakeTagger:
+    def tag_image(self, pil, gen_th=0.35, char_th=0.9, use_char=True):
+        return {"long hair": 0.9, "dress": 0.7, "indoors": 0.5, "unknown thing": 0.4}
+
+
+def test_analyze_endpoint(tmp_path, monkeypatch):
+    client = TestClient(_app(tmp_path, monkeypatch))
+    monkeypatch.setattr("backend.api.routes_promptbox.get_tagger",
+                        lambda model="wd14": _FakeTagger())
+    r = client.post("/api/promptbox/analyze",
+                    data={"model": "wd14", "gen_th": "0.35", "char_th": "0.9"},
+                    files=[("files", ("a.png", _png(), "image/png"))])
+    assert r.status_code == 200
+    items = r.json()["items"]
+    assert len(items) == 1
+    it = items[0]
+    assert it["local_id"]
+    assert it["model"] == "wd14"
+    assert "long hair" in it["categories"]["head"]
+    assert "dress" in it["categories"]["clothing"]
+    assert "unknown thing" in it["extras"]
+    assert "long hair" in it["raw_prompt"]
+    # 工作区缩略图可访问
+    assert client.get(
+        f"/api/promptbox/workspace/{it['local_id']}/image/{it['thumb']}"
+    ).status_code == 200
+
+
+def test_workspace_image_404(tmp_path, monkeypatch):
+    client = TestClient(_app(tmp_path, monkeypatch))
+    assert client.get(
+        "/api/promptbox/workspace/nope/image/thumb.webp"
+    ).status_code == 404

@@ -3,8 +3,11 @@ import mimetypes
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from PIL import Image, UnidentifiedImageError
 
-from backend.deps import get_classifier, get_promptbox_store
+from backend.deps import get_classifier, get_tagger, get_promptbox_store
+from backend.tagger.models_spec import DEFAULT_MODEL_KEY
+from backend.models import PROMPT_ORDER
 
 router = APIRouter(prefix="/api/promptbox", tags=["promptbox"])
 
@@ -50,6 +53,56 @@ def create_item(
 @router.get("")
 def list_items():
     return [it.model_dump() for it in get_promptbox_store().list_all()]
+
+
+# ---- 反推工作区 ----
+# 路由须在 /{item_id} 之前注册：否则 GET /workspace/... 的首段会被 /{item_id} 捕获。
+# analyze：图落 workspace（不进图库 data/images/），反推+分类后返回，供前端工作台网格展示。
+@router.post("/analyze")
+def analyze(
+    files: list[UploadFile] = File(...),
+    model: str = Form(DEFAULT_MODEL_KEY),
+    gen_th: float = Form(0.35),
+    char_th: float = Form(0.9),
+):
+    store = get_promptbox_store()
+    tagger = get_tagger(model)
+    classifier = get_classifier()
+    items = []
+    for f in files:
+        try:
+            pil = Image.open(f.file)
+            pil.load()
+        except (UnidentifiedImageError, OSError) as e:
+            raise HTTPException(status_code=400, detail=f"bad image {f.filename}: {e}")
+        local_id = store.new_id()
+        orig, thumb, w, h = store.save_workspace_image(local_id, pil, f.filename or "img.png")
+        raw = tagger.tag_image(pil, gen_th, char_th, True)
+        classified = classifier.classify(raw)
+        categories = {k: list(classified[k].tags) for k in PROMPT_ORDER}
+        extras = list(classified["extras"].tags)
+        # raw_prompt 含全部 6 类 + extras，供工作区卡片预览/复制（区别图库 build_prompt 不含 extras）
+        all_tags = [t for k in PROMPT_ORDER for t in categories[k]] + extras
+        items.append({
+            "local_id": local_id, "original": orig, "thumb": thumb,
+            "width": w, "height": h, "model": model,
+            "categories": categories, "extras": extras,
+            "raw_prompt": ", ".join(all_tags),
+        })
+    return {"items": items}
+
+
+@router.get("/workspace/{local_id}/image/{name}")
+def get_workspace_image(local_id: str, name: str):
+    store = get_promptbox_store()
+    try:
+        p = store.workspace_image_path(local_id, name)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="bad name")
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="not found")
+    ctype = mimetypes.guess_type(str(p))[0] or "application/octet-stream"
+    return FileResponse(p, media_type=ctype)
 
 
 @router.get("/{item_id}")
