@@ -1,5 +1,5 @@
 import mimetypes
-from fastapi import APIRouter, UploadFile, File, HTTPException, Query
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query
 from fastapi.responses import FileResponse
 from PIL import Image, UnidentifiedImageError
 
@@ -9,7 +9,7 @@ router = APIRouter(prefix="/api/images", tags=["images"])
 
 
 @router.post("")
-def upload_images(files: list[UploadFile] = File(...)):
+def upload_images(files: list[UploadFile] = File(...), tags: list[str] = Form(default_factory=list)):
     storage = get_storage()
     # 先全部解码验证，避免部分失败时已写盘的孤儿文件
     decoded = []
@@ -20,7 +20,7 @@ def upload_images(files: list[UploadFile] = File(...)):
         except (UnidentifiedImageError, OSError) as e:
             raise HTTPException(status_code=400, detail=f"bad image {f.filename}: {e}")
         decoded.append((pil, f.filename or "upload.png"))
-    ids = [storage.save_upload(pil, name) for pil, name in decoded]
+    ids = [storage.save_upload(pil, name, tags) for pil, name in decoded]
     return {"ids": ids}
 
 
@@ -90,8 +90,22 @@ from backend.models import Meta
 
 
 @router.get("")
-def list_images(page: int = Query(1, ge=1), size: int = Query(24, ge=1, le=200)):
-    return get_storage().list_images(page, size)
+def list_images(
+    page: int = Query(1, ge=1),
+    size: int = Query(24, ge=1, le=200),
+    date: str | None = Query(None, min_length=8, max_length=8),
+    random: bool = Query(False),
+    tags: list[str] = Query(default_factory=list),
+    prompt: list[str] = Query(default_factory=list),
+):
+    return get_storage().list_images(page, size, date=date, random=random, tags=tags, prompt=prompt)
+
+
+# 必须声明在 /{mid} 之前：FastAPI 按注册顺序匹配，否则 GET /tags 会命中
+# get_meta_endpoint(mid="tags") 返回 404。
+@router.get("/tags")
+def list_all_tags():
+    return get_storage().all_tags()
 
 
 @router.get("/{mid}")

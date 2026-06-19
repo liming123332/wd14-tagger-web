@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NSpace, NButton, NRadioGroup, NRadioButton, NImage, NCard, NInputNumber, useMessage, NPopconfirm } from 'naive-ui'
+import { NSpace, NButton, NRadioGroup, NRadioButton, NImage, NCard, NInputNumber, NInput, NDynamicTags, useMessage, NPopconfirm } from 'naive-ui'
 import TagEditor from '../components/TagEditor.vue'
-import { getMeta, saveMeta, tagImage, reclassify, deleteImage, fileUrl } from '../api/client'
+import { getMeta, saveMeta, tagImage, reclassify, deleteImage, fileUrl, applyCategoryRules } from '../api/client'
 import { buildPrompt } from '../detail-utils'
 
 const route = useRoute(); const router = useRouter(); const msg = useMessage()
@@ -34,6 +34,17 @@ function setCat(key: string, val: any) {
   meta.value.categories[key] = val; dirty.value = true
 }
 function setExtras(val: any) { meta.value.extras = val; dirty.value = true }
+
+// 改名 / 自定义标签：改即置脏，复用下方 save() 走 PUT 整个 meta。
+function onName(v: string) { meta.value.source_name = v; dirty.value = true }
+function onTags(v: string[]) { meta.value.tags = v; dirty.value = true }
+
+// 把该分类当前 tags 存入分类词表（tag_rules.yaml exact）并 reload，下次反推生效
+async function onApplyRule(key: string, title: string, tags: string[]) {
+  if (!tags || !tags.length) { msg.warning('该分类暂无标签可应用'); return }
+  try { await applyCategoryRules(key, tags); msg.success(`已加入「${title}」分类词表，下次反推自动归类`) }
+  catch (e: any) { msg.error('应用失败：' + e.message) }
+}
 
 // 应用短句：从 phrase 拆 tags 覆盖该类
 function applyPhrase(key: string, tags: string[]) {
@@ -71,9 +82,15 @@ async function copyPrompt() {
       <n-card>
         <n-image :src="fileUrl(id, meta.image.thumb)" :preview-src="fileUrl(id, meta.image.original)" object-fit="contain" style="max-height:420px;width:100%;display:block" />
         <div style="font-size:12px;margin-top:8px">
-          <div>{{ meta.source_name }}</div>
+          <div style="margin-bottom:4px">
+            名称 <n-input :value="meta.source_name" size="small" @update:value="onName" placeholder="图片名称" style="width:240px" />
+          </div>
           <div>{{ meta.image.width }}×{{ meta.image.height }} · {{ meta.model }}</div>
           <div>通用 <n-input-number v-model:value="genTh" :step="0.05" :min="0" :max="1" size="small" style="width:96px" /> / 角色 <n-input-number v-model:value="charTh" :step="0.05" :min="0" :max="1" size="small" style="width:96px" /></div>
+          <div style="margin-top:6px">
+            <div style="color:#888;margin-bottom:2px">自定义标签（用于图库筛选）</div>
+            <n-dynamic-tags :value="meta.tags || []" size="small" @update:value="onTags" />
+          </div>
         </div>
         <n-space vertical style="margin-top:8px">
           <n-button size="small" @click="reTag">重新反推</n-button>
@@ -92,9 +109,12 @@ async function copyPrompt() {
         <n-button size="small" type="primary" :disabled="!dirty" @click="save">保存</n-button>
       </n-space>
       <TagEditor v-for="[key, title, color] in KEY_TITLES" :key="key" :title="title" :color="color"
-                 :mode="mode" :model-value="meta.categories[key]"
-                 @update:modelValue="(v) => setCat(key, v)" @apply-phrase="(t) => applyPhrase(key, t)" />
+                 :mode="mode" :category-key="key"
+                 :model-value="meta.categories[key] || { tags: [], phrase: '', user_edited: false }"
+                 @update:modelValue="(v) => setCat(key, v)" @apply-phrase="(t) => applyPhrase(key, t)"
+                 @apply-rule="(t) => onApplyRule(key, title, t)" />
       <TagEditor title="未归类 extras（拖到各类为复制，不会移除原标签）" color="#9E9E9E" :mode="mode"
+                 category-key="extras"
                  :model-value="meta.extras"
                  @update:modelValue="setExtras" @apply-phrase="(t) => applyPhrase('extras', t)" />
     </div>

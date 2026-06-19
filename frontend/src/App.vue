@@ -6,6 +6,7 @@ const router = useRouter()
 const options = [
   { label: '上传', key: 'upload' },
   { label: '图库', key: 'gallery' },
+  { label: '随机', key: 'random' },
   { label: '设置', key: 'settings' },
 ]
 function go(key: string) { router.push('/' + key) }

@@ -1,18 +1,21 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { NTag, NInput, NButton, NSpace, NPopconfirm } from 'naive-ui'
+import { NTag, NInput, NButton, NSpace, NPopconfirm, useMessage } from 'naive-ui'
 import { parsePhrase } from '../detail-utils'
 
 const props = defineProps<{
   title: string; color: string
   modelValue: { tags: string[]; phrase: string; user_edited: boolean }
   mode: 'tags' | 'phrase'
+  categoryKey?: string
 }>()
 const emit = defineEmits<{
   (e: 'update:modelValue', v: any): void
   (e: 'applyPhrase', tags: string[]): void
+  (e: 'applyRule', tags: string[]): void
 }>()
 
+const msg = useMessage()
 const newTag = ref('')
 const dragging = ref(false)
 
@@ -38,6 +41,12 @@ function onDrop(e: DragEvent) {
   const tag = e.dataTransfer?.getData('text/tag'); if (!tag) return
   if (!props.modelValue.tags.includes(tag)) patch({ tags: [...props.modelValue.tags, tag], user_edited: true })
 }
+
+// 短句模式：复制该分类当前的 phrase 文本
+async function copyPhrase() {
+  try { await navigator.clipboard.writeText(props.modelValue.phrase || ''); msg.success('已复制当前提示词') }
+  catch { msg.error('复制失败') }
+}
 </script>
 
 <template>
@@ -53,15 +62,20 @@ function onDrop(e: DragEvent) {
         <n-space style="margin-top:6px">
           <n-input v-model:value="newTag" size="small" placeholder="添加标签" @keyup.enter="addTag" style="width:160px" />
           <n-button size="small" @click="addTag">+</n-button>
+          <n-button v-if="categoryKey && categoryKey !== 'extras'" size="tiny" type="info" ghost
+                    @click="$emit('applyRule', modelValue.tags)">应用到分类词表</n-button>
         </n-space>
       </template>
       <template v-else>
         <textarea class="phrase-box" :value="modelValue.phrase" @input="onPhraseInput"
                   rows="2" placeholder="短句（用逗号分隔多标签）"></textarea>
-        <n-popconfirm @positive-click="applyPhrase">
-          <template #trigger><n-button size="tiny" :disabled="!modelValue.user_edited">应用短句到标签</n-button></template>
-          将用短句覆盖当前标签？
-        </n-popconfirm>
+        <n-space style="margin-top:6px">
+          <n-popconfirm @positive-click="applyPhrase">
+            <template #trigger><n-button size="tiny" :disabled="!modelValue.user_edited">应用短句到标签</n-button></template>
+            将用短句覆盖当前标签？
+          </n-popconfirm>
+          <n-button size="tiny" @click="copyPhrase">复制当前提示词</n-button>
+        </n-space>
       </template>
       <div v-if="dragging" class="drop-hint">拖到此处（复制）</div>
     </div>

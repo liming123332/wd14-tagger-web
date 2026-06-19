@@ -37,7 +37,7 @@ function reset() {
   es = null
 }
 
-async function start(files: File[], autoTag: boolean, genTh: number, charTh: number) {
+async function start(files: File[], autoTag: boolean, genTh: number, charTh: number, tags?: string[]) {
   reset()
   state.phase = 'uploading'
   state.total = files.length
@@ -45,7 +45,7 @@ async function start(files: File[], autoTag: boolean, genTh: number, charTh: num
   const ids: string[] = []
   for (let i = 0; i < files.length; i++) {
     try {
-      const res = await uploadOne(files[i])
+      const res = await uploadOne(files[i], tags)
       state.uploaded++
       state.items[i].id = res.id
       ids.push(res.id)
