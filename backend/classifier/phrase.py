@@ -12,7 +12,7 @@ def tags_to_phrase(tags: list[str], scores: dict[str, float] | None = None) -> s
         ordered.append(t)
     if scores:
         ordered.sort(key=lambda t: scores.get(t, 0.0), reverse=True)
-    return " ".join(ordered)
+    return ", ".join(ordered)
 
 
 def apply_phrase(phrase: str) -> list[str]:

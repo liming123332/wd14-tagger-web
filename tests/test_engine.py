@@ -57,7 +57,7 @@ def test_classify_extras_catches_unknown(clf):
 def test_classify_phrase_generated(clf):
     raw = {"long hair": 0.9, "blue eyes": 0.8}
     res = clf.classify(raw)
-    assert res["head"].phrase == "long hair blue eyes"  # 按分数降序 (0.9 > 0.8)
+    assert res["head"].phrase == "long hair, blue eyes"  # 按分数降序 (0.9 > 0.8)
 
 
 def test_reclassify_skips_user_edited(clf):

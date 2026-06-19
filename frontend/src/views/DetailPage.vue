@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NSpace, NButton, NRadioGroup, NRadioButton, NImage, NCard, useMessage, NPopconfirm } from 'naive-ui'
+import { NSpace, NButton, NRadioGroup, NRadioButton, NImage, NCard, NInputNumber, useMessage, NPopconfirm } from 'naive-ui'
 import TagEditor from '../components/TagEditor.vue'
 import { getMeta, saveMeta, tagImage, reclassify, deleteImage, fileUrl } from '../api/client'
 import { buildPrompt } from '../detail-utils'
@@ -11,12 +11,16 @@ const id = computed(() => route.params.id as string)
 const meta = ref<any>(null)
 const mode = ref<'tags' | 'phrase'>('tags')
 const dirty = ref(false)
+const genTh = ref(0.35)
+const charTh = ref(0.9)
 
 async function load() {
   const cur = id.value
   const m = await getMeta(cur)
   if (cur !== id.value) return  // 已切到其它图，丢弃旧结果防竞态
   meta.value = m; dirty.value = false
+  genTh.value = m.tagger.gen_threshold
+  charTh.value = m.tagger.char_threshold
 }
 watch(id, load, { immediate: true })
 
@@ -44,7 +48,7 @@ async function save() {
 }
 
 async function reTag() {
-  meta.value = await tagImage(id.value, meta.value.tagger.gen_threshold, meta.value.tagger.char_threshold)
+  meta.value = await tagImage(id.value, genTh.value, charTh.value)
   msg.success('反推完成')
 }
 async function reClassify() {
@@ -69,7 +73,7 @@ async function copyPrompt() {
         <div style="font-size:12px;margin-top:8px">
           <div>{{ meta.source_name }}</div>
           <div>{{ meta.image.width }}×{{ meta.image.height }} · {{ meta.model }}</div>
-          <div>通用 {{ meta.tagger.gen_threshold }} / 角色 {{ meta.tagger.char_threshold }}</div>
+          <div>通用 <n-input-number v-model:value="genTh" :step="0.05" :min="0" :max="1" size="small" style="width:96px" /> / 角色 <n-input-number v-model:value="charTh" :step="0.05" :min="0" :max="1" size="small" style="width:96px" /></div>
         </div>
         <n-space vertical style="margin-top:8px">
           <n-button size="small" @click="reTag">重新反推</n-button>
