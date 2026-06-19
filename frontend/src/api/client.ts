@@ -54,10 +54,10 @@ export async function saveMeta(id: string, meta: any) {
   }).then(r => r.json())
 }
 
-export async function tagImage(id: string, gen_th = 0.35, char_th = 0.9) {
+export async function tagImage(id: string, gen_th = 0.35, char_th = 0.9, model = 'wd14') {
   return fetch(`${base}/api/images/${id}/tag`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ gen_th, char_th, use_char: true }),
+    body: JSON.stringify({ gen_th, char_th, use_char: true, model }),
   }).then(r => r.json())
 }
 
@@ -69,10 +69,10 @@ export async function deleteImage(id: string) {
   return fetch(`${base}/api/images/${id}`, { method: 'DELETE' }).then(r => r.json())
 }
 
-export async function startBatch(ids: string[], gen_th = 0.35, char_th = 0.9) {
+export async function startBatch(ids: string[], gen_th = 0.35, char_th = 0.9, model = 'wd14') {
   return fetch(`${base}/api/batch/tag`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ids, gen_th, char_th }),
+    body: JSON.stringify({ ids, gen_th, char_th, model }),
   }).then(r => r.json())
 }
 
@@ -93,5 +93,15 @@ export function subscribeBatch(
 
 export function fileUrl(id: string, name: string) {
   return `${base}/api/images/${id}/file/${name}`
+}
+
+export interface TaggerInfo { key: string; label: string; downloaded: boolean }
+
+export async function listTaggers(): Promise<TaggerInfo[]> {
+  return fetch(`${base}/api/taggers`).then(r => r.json())
+}
+
+export async function downloadTagger(key: string): Promise<{ key: string; downloaded: boolean }> {
+  return fetch(`${base}/api/taggers/${key}/download`, { method: 'POST' }).then(r => r.json())
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { uploadOne, listImages, randomImages, listTags, applyCategoryRules } from '../api/client'
+import { uploadOne, listImages, randomImages, listTags, applyCategoryRules, tagImage, startBatch, listTaggers, downloadTagger } from '../api/client'
 
 describe('uploadOne', () => {
   beforeEach(() => { vi.unstubAllGlobals() })
@@ -117,5 +117,62 @@ describe('applyCategoryRules', () => {
     expect(seen[0].url).toBe('/api/config/rules/head')
     expect(seen[0].method).toBe('PUT')
     expect(JSON.parse(seen[0].body)).toEqual({ tags: ['long hair', 'elf ears'] })
+  })
+})
+
+describe('tagImage', () => {
+  beforeEach(() => { vi.unstubAllGlobals() })
+  it('POST /api/images/{id}/tag 带 model', async () => {
+    const seen: any[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, opts: any) => {
+      seen.push({ url, body: opts.body })
+      return { ok: true, json: async () => ({ id: 'x', model: 'wd3' }) } as any
+    }))
+    await tagImage('id1', 0.3, 0.9, 'wd3')
+    expect(seen[0].url).toBe('/api/images/id1/tag')
+    expect(JSON.parse(seen[0].body)).toMatchObject({ model: 'wd3', use_char: true })
+  })
+})
+
+describe('startBatch', () => {
+  beforeEach(() => { vi.unstubAllGlobals() })
+  it('POST /api/batch/tag 带 model', async () => {
+    const seen: any[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, opts: any) => {
+      seen.push({ url, body: opts.body })
+      return { ok: true, json: async () => ({ batch_id: 'B' }) } as any
+    }))
+    await startBatch(['a', 'b'], 0.35, 0.9, 'e621')
+    expect(seen[0].url).toBe('/api/batch/tag')
+    expect(JSON.parse(seen[0].body)).toMatchObject({ ids: ['a', 'b'], model: 'e621' })
+  })
+})
+
+describe('listTaggers', () => {
+  beforeEach(() => { vi.unstubAllGlobals() })
+  it('GET /api/taggers 返回模型列表', async () => {
+    const urls: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      urls.push(url)
+      return { ok: true, json: async () => [{ key: 'wd14', label: 'WD14', downloaded: true }] } as any
+    }))
+    const r = await listTaggers()
+    expect(urls[0]).toBe('/api/taggers')
+    expect(r).toEqual([{ key: 'wd14', label: 'WD14', downloaded: true }])
+  })
+})
+
+describe('downloadTagger', () => {
+  beforeEach(() => { vi.unstubAllGlobals() })
+  it('POST /api/taggers/{key}/download', async () => {
+    const seen: any[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, opts: any) => {
+      seen.push({ url, method: opts.method })
+      return { ok: true, json: async () => ({ key: 'wd3', downloaded: true }) } as any
+    }))
+    const r = await downloadTagger('wd3')
+    expect(seen[0].url).toBe('/api/taggers/wd3/download')
+    expect(seen[0].method).toBe('POST')
+    expect(r).toEqual({ key: 'wd3', downloaded: true })
   })
 })
