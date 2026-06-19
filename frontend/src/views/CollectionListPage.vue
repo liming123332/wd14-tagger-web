@@ -48,12 +48,15 @@ function goDetail(id: string) { router.push(`/collections/${id}`) }
 </script>
 
 <template>
-  <div style="margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-    <n-input :value="keyword" placeholder="搜索标题或提示词" size="small" clearable
-             @update:value="(v: string) => keyword = v"
-             style="min-width:240px;max-width:360px" />
-    <n-button size="small" type="primary" @click="goPromptbox">→ 去提示词收藏（上传反推 / 拆分）</n-button>
-  </div>
+  <n-card size="small" class="filter-bar" style="margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+      <div class="field"><span class="field-label">搜索</span>
+        <n-input :value="keyword" placeholder="搜索标题或提示词" size="small" clearable
+                 @update:value="(v: string) => keyword = v"
+                 style="min-width:240px;max-width:360px" /></div>
+      <n-button size="small" type="primary" @click="goPromptbox">去提示词收藏（上传反推 / 拆分）</n-button>
+    </div>
+  </n-card>
   <n-empty v-if="!filtered.length" :description="keyword ? '没有符合条件的收藏' : '还没有收藏，去提示词收藏页创建'" />
   <n-grid v-else cols="2 600:3 900:4 1200:5" :x-gap="12" :y-gap="12">
     <n-grid-item v-for="it in filtered" :key="it.id">
@@ -90,4 +93,6 @@ function goDetail(id: string) { router.push(`/collections/${id}`) }
 }
 .cats { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 6px }
 .cats :deep(.n-tag) { font-size: 11px }
+.field { display: flex; align-items: center; gap: 8px }
+.field-label { font-size: 13px; font-weight: 600; color: var(--n-text-color-3, #6b7280); min-width: 28px }
 </style>

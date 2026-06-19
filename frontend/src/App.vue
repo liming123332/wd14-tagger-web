@@ -42,7 +42,12 @@ const activeKey = computed(() => {
 })
 function go(key: string) { router.push(key) }
 
-const currentTitle = computed(() => ITEMS.find(i => i.key === activeKey.value)?.label || '')
+const currentTitle = computed(() => {
+  const p = route.path
+  if (p.startsWith('/detail')) return '图片详情'
+  if (p.startsWith('/batch')) return '批次详情'
+  return ITEMS.find(i => i.key === activeKey.value)?.label || ''
+})
 
 const themeIcon = computed(() =>
   mode.value === 'light' ? IconSun : mode.value === 'dark' ? IconMoon : IconMonitor)
@@ -57,11 +62,11 @@ function cycleTheme() {
   <n-config-provider :theme="theme" :theme-overrides="overrides">
     <n-message-provider>
       <n-dialog-provider>
-        <n-layout has-sider style="min-height:100vh">
+        <n-layout has-sider :class="effective" style="min-height:100vh">
           <n-layout-sider class="sider" bordered :width="220" :collapsed-width="64" show-trigger collapse-mode="width"
                           :native-scrollbar="false"
                           content-style="display:flex;flex-direction:column;min-height:100%">
-            <div class="brand">◆ WD14 标注</div>
+            <div class="brand">WD14 标注</div>
             <n-menu :value="activeKey" :options="menuOptions" :collapsed-width="64"
                     @update:value="go" style="flex:1" />
             <div class="sider-foot">

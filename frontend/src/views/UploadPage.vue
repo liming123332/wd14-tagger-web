@@ -6,6 +6,7 @@ import { useTagger } from '../composables/useTagger'
 import { useRouter } from 'vue-router'
 import { useBatch } from '../composables/useBatch'
 import BatchBars from '../components/BatchBars.vue'
+import { IconCheck } from '../components/icons'
 
 const router = useRouter()
 const msg = useMessage()
@@ -106,7 +107,7 @@ async function go() {
     </n-card>
     <n-card v-if="state.phase !== 'idle'" title="进度">
       <BatchBars :uploaded="state.uploaded" :tagged="state.tagged" :total="state.total" />
-      <div v-if="state.phase === 'done'" style="color:#18a058;margin-top:8px">✓ 完成（成功 {{ state.tagged }} · 失败 {{ state.failed }}）</div>
+      <div v-if="state.phase === 'done'" style="color:#18a058;margin-top:8px"><IconCheck/> 完成（成功 {{ state.tagged }} · 失败 {{ state.failed }}）</div>
       <div v-if="state.phase === 'error'" style="color:#d03050;margin-top:8px">全部上传失败</div>
       <div v-if="isBusy()" style="font-size:12px;color:#888;margin-top:6px">处理中：{{ state.current }}</div>
     </n-card>

@@ -186,7 +186,6 @@ async function copyPrompt() {
   height: auto;
 }
 .img-wrap {
-  background: #0f1115;
   border-radius: 10px;
   padding: 8px;
   display: flex;

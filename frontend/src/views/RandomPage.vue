@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { NGrid, NGridItem, NEmpty, NButton } from 'naive-ui'
 import { randomImages } from '../api/client'
+import { IconRandom } from '../components/icons'
 import ImageCard from '../components/ImageCard.vue'
 
 const items = ref<any[]>([])
@@ -22,7 +23,7 @@ onMounted(shuffle)
 
 <template>
   <div style="margin-bottom:12px">
-    <n-button type="primary" size="small" :loading="loading" @click="shuffle">🎲 再抽一页</n-button>
+    <n-button type="primary" size="small" :loading="loading" @click="shuffle"><IconRandom/> 再抽一页</n-button>
     <span style="font-size:12px;color:#888;margin-left:8px">从全库随机展示 {{ size }} 张</span>
   </div>
   <n-empty v-if="!items.length" description="图库还没有图片，先去上传" />

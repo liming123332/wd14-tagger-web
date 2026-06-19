@@ -74,7 +74,7 @@ describe('CollectionListPage', () => {
     }))
     const w = mount(CollectionListPage, { global: { stubs: { NMenu: true } } })
     await flushPromises()
-    await w.find('.n-card').trigger('click')
+    await w.find('.n-card:not(.filter-bar)').trigger('click')
     expect(push).toHaveBeenCalledWith('/collections/c1')
   })
 })

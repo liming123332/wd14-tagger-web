@@ -7,3 +7,7 @@ body {
 }
 .fade-enter-active, .fade-leave-active { transition: opacity 0.15s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+.light .img-wrap { background: #f0f0f2; }
+.dark .img-wrap { background: #0f1115; }
+.light .no-img { background: #f0f0f2; color: #9ca3af; }
+.dark .no-img { background: #111317; color: #6b7280; }

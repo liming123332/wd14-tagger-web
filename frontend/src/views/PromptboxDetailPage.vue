@@ -12,6 +12,7 @@ import {
   applyCategoryRules, type PromptboxItem,
 } from '../api/client'
 import { useTagger } from '../composables/useTagger'
+import { IconPlus } from '../components/icons'
 
 // 收藏编辑页：复用图库 DetailPage 布局 + TagEditor/applyCategoryRules/useTagger 件，
 // 适配 promptbox 数据结构。promptbox 的 categories 是 string[]，这里加载时包成
@@ -216,7 +217,7 @@ async function copyPrompt() {
         </div>
         <n-space vertical style="margin-top:8px">
           <n-upload :show-file-list="false" :max="1" accept="image/*" :custom-request="onUploadReq">
-            <n-button size="small">＋ 上传图片</n-button>
+            <n-button size="small"><IconPlus/> 上传图片</n-button>
           </n-upload>
           <n-button size="small" :disabled="!hasImage" @click="reTag">重新反推</n-button>
           <n-button size="small" :disabled="!hasRawTags" @click="reClassify">重分类</n-button>
@@ -264,10 +265,9 @@ async function copyPrompt() {
 }
 .no-img {
   height: 200px; display: flex; align-items: center; justify-content: center;
-  color: #999; background: #f5f5f5; font-size: 13px; border-radius: 4px;
+  font-size: 13px; border-radius: 4px;
 }
 .img-wrap {
-  background: #0f1115;
   border-radius: 10px;
   padding: 8px;
   display: flex;
