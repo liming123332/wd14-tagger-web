@@ -59,3 +59,8 @@ class PromptboxItem(BaseModel):
     image_names: list[str] = Field(default_factory=list)
     created_at: str = ""
     updated_at: str = ""
+    # 反推/重分类元数据：老收藏 items.json 无这些字段，靠默认值兼容，无需数据迁移
+    model: str = "wd14"
+    gen_threshold: float = 0.35
+    char_threshold: float = 0.90
+    raw_tags: dict[str, float] = Field(default_factory=dict)
