@@ -11,6 +11,12 @@ def get_storage() -> Storage:
 
 
 @lru_cache
+def get_promptbox_store():
+    from backend.storage.promptbox_store import PromptboxStore
+    return PromptboxStore()
+
+
+@lru_cache
 def get_classifier() -> Classifier:
     return Classifier()
 

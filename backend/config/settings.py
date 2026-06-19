@@ -5,6 +5,7 @@ ROOT = Path(__file__).resolve().parents[2]  # wd14-tagger-web/
 
 DATA_DIR = ROOT / "data"
 IMAGES_DIR = DATA_DIR / "images"
+PROMPTBOX_DIR = DATA_DIR / "promptbox"
 MODELS_DIR = ROOT / "models"
 CONFIG_DIR = ROOT / "backend" / "config"
 TAG_RULES_PATH = CONFIG_DIR / "tag_rules.yaml"

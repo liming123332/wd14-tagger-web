@@ -46,3 +46,16 @@ def build_prompt(meta: Meta) -> str:
         if cat:
             out.extend(t for t in cat.tags if t)
     return ", ".join(out)
+
+
+class PromptboxItem(BaseModel):
+    """「提示词收藏」的一条记录：存用户处理过的拆分结果（可手改）+ 原始粘贴文本。
+    与图库 Meta 物理隔离（data/promptbox/）。"""
+    id: str
+    title: str = ""
+    raw_prompt: str = ""
+    categories: dict[str, list[str]] = Field(default_factory=dict)
+    extras: list[str] = Field(default_factory=list)
+    image_names: list[str] = Field(default_factory=list)
+    created_at: str = ""
+    updated_at: str = ""
