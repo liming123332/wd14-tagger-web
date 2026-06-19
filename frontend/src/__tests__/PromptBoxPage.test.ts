@@ -7,59 +7,55 @@ vi.mock('naive-ui', async () => {
   const actual: any = await vi.importActual('naive-ui')
   return { ...actual, useMessage: () => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }) }
 })
+// mock useTagger：避免 onMounted refresh 触发真 fetch，state.taggers 保持为数组
+vi.mock('../composables/useTagger', () => {
+  const state = {
+    selected: 'wd14',
+    taggers: [{ key: 'wd14', label: 'WD14', downloaded: true }],
+    downloading: null,
+  }
+  return {
+    useTagger: () => ({
+      state,
+      setSelected: vi.fn((k: string) => { state.selected = k }),
+      refresh: vi.fn(async () => {}),
+      isDownloaded: (k: string) => state.taggers.some((t: any) => t.key === k && t.downloaded),
+      download: vi.fn(async () => {}),
+    }),
+  }
+})
 
-describe('PromptBoxPage', () => {
+describe('PromptBoxPage 工作台', () => {
   beforeEach(() => { vi.unstubAllGlobals() })
 
-  it('onMounted 拉取收藏列表并渲染卡片', async () => {
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-      if (url === '/api/promptbox') {
-        return { ok: true, json: async () => [{ id: 'p1', title: '我的收藏', raw_prompt: 'long hair', categories: {}, extras: [], image_names: [], created_at: '', updated_at: '' }] } as any
-      }
-      return { ok: true, json: async () => ({}) } as any
-    }))
+  it('含上传反推按钮', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ items: [] }) }) as any))
     const w = mount(PromptBoxPage, { global: { stubs: { NMenu: true } } })
     await flushPromises()
-    expect(w.text()).toContain('我的收藏')
+    expect(w.findAll('button').find(b => b.text().includes('反推'))).toBeTruthy()
   })
 
-  it('点拆分按逗号文本调用 split 并显示分栏', async () => {
+  it('粘贴提示词拆分并显示分类', async () => {
     const calls: string[] = []
     vi.stubGlobal('fetch', vi.fn(async (url: string, _opts: any) => {
       calls.push(url)
       if (url === '/api/promptbox/split') {
         return { ok: true, json: async () => ({ categories: { head: ['long hair'], clothing: ['dress'] }, extras: ['weird'] }) } as any
       }
-      return { ok: true, json: async () => [] } as any
+      return { ok: true, json: async () => ({ items: [] }) } as any
     }))
     const w = mount(PromptBoxPage, { global: { stubs: { NMenu: true } } })
     await flushPromises()
-    // 找到 textarea 并填入文本
     const ta = w.find('textarea')
     await ta.setValue('long hair, dress, weird')
-    // 点拆分按钮
-    const splitBtn = w.findAll('button').find(b => b.text().includes('拆分'))
+    const splitBtn = w.findAll('button').find(b => b.text().includes('粘贴拆分'))
     expect(splitBtn).toBeTruthy()
     await splitBtn!.trigger('click')
     await flushPromises()
     expect(calls).toContain('/api/promptbox/split')
+    // 工作区出现粘贴项 + 拆分编辑区显示标签
+    expect(w.text()).toContain('工作区')
     expect(w.text()).toContain('long hair')
     expect(w.text()).toContain('dress')
-  })
-
-  it('列表卡片渲染且含删除按钮', async () => {
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-      if (url === '/api/promptbox') {
-        return { ok: true, json: async () => [{ id: 'p1', title: '待删', raw_prompt: 'x', categories: {}, extras: [], image_names: [], created_at: '', updated_at: '' }] } as any
-      }
-      return { ok: true, json: async () => ({}) } as any
-    }))
-    const w = mount(PromptBoxPage, { global: { stubs: { NMenu: true } } })
-    await flushPromises()
-    expect(w.text()).toContain('待删')
-    const delBtn = w.findAll('button').find(b => b.text().includes('删除'))
-    expect(delBtn).toBeTruthy()
-    // 注：n-popconfirm 单击只弹确认层，DELETE 调用由 Task 3 test_delete 在 API 层覆盖；
-    // 此处只验证删除按钮存在，避免依赖 popconfirm 弹层 DOM 的 flaky。
   })
 })
