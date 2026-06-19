@@ -222,9 +222,20 @@ async function copyPrompt() {
 </template>
 
 <style scoped>
-/* 与图库 DetailPage 一致：强制 n-image block + 100% 宽，防原图自然宽度溢出 */
+/* promptbox 仅存原图（无图库 thumb 缩略图）。强制 n-image block + 100% 宽，
+   并把 img 等比缩进 420px 框（max-height + object-fit:contain），避免大图溢出卡片。
+   图库 DetailPage 靠 thumb 小图避免溢出；这里没有 thumb，故用 max-height 兜底，
+   视觉与图库一致（图 contain 进 420px 框，点击仍预览原图）。 */
 :deep(.n-image) { display: block; width: 100%; }
-:deep(.n-image img) { max-width: 100%; height: auto; }
+:deep(.n-image img) {
+  max-width: 100%;
+  max-height: 420px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto;
+}
 .no-img {
   height: 200px; display: flex; align-items: center; justify-content: center;
   color: #999; background: #f5f5f5; font-size: 13px; border-radius: 4px;
