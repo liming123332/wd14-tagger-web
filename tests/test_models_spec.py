@@ -3,9 +3,9 @@ import pytest
 from backend.tagger.models_spec import MODEL_SPECS, DEFAULT_MODEL_KEY, is_downloaded, ModelSpec
 
 
-def test_seven_models_present():
+def test_eight_models_present():
     assert set(MODEL_SPECS.keys()) == {
-        "wd14", "wd3", "wd_vit_v3", "wd_eva_v3", "wd_conv_v3", "ddb", "e621"
+        "wd14", "wd3", "wd_vit_v3", "wd_eva_v3", "wd_conv_v3", "ddb", "e621", "cl_tagger"
     }
     assert DEFAULT_MODEL_KEY == "wd14"
 
@@ -15,9 +15,9 @@ def test_each_spec_has_required_fields():
         assert spec.key == key
         assert spec.label  # 非空
         assert spec.folder
-        assert "model.onnx" in spec.files  # 第二个文件 csv 或 txt
-        assert spec.prep in ("bgr_wd", "ddb")
-        assert spec.tag_source in ("csv", "txt")
+        assert "model.onnx" in spec.files  # 第二个文件 csv/txt/json
+        assert spec.prep in ("bgr_wd", "ddb", "cl")
+        assert spec.tag_source in ("csv", "txt", "cl_json")
 
 
 def test_ddb_uses_txt_and_ddb_prep():
@@ -67,3 +67,13 @@ def test_e621_url_uses_silveroxides_owner():
     for url in spec.files.values():
         assert "silveroxides/Z3D-E621-Convnext" in url
         assert "SmilingWolf/silveroxides" not in url
+
+
+def test_cl_spec():
+    s = MODEL_SPECS["cl_tagger"]
+    assert s.prep == "cl"
+    assert s.tag_source == "cl_json"
+    assert "tag_mapping.json" in s.files
+    assert "model.onnx" in s.files
+    for url in s.files.values():
+        assert "cella110n/cl_tagger/resolve/main/cl_tagger_1_01" in url

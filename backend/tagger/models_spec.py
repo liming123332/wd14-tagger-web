@@ -12,8 +12,8 @@ class ModelSpec:
     label: str
     folder: str
     files: dict[str, str]  # 文件名 -> 下载 URL
-    prep: str              # "bgr_wd" | "ddb"
-    tag_source: str        # "csv" | "txt"
+    prep: str              # "bgr_wd" | "ddb" | "cl"
+    tag_source: str        # "csv" | "txt" | "cl_json"
 
 
 def _wd(key: str, label: str, folder: str, repo: str, owner: str = "SmilingWolf") -> ModelSpec:
@@ -23,6 +23,18 @@ def _wd(key: str, label: str, folder: str, repo: str, owner: str = "SmilingWolf"
         files={"model.onnx": f"{base}/model.onnx",
                "selected_tags.csv": f"{base}/selected_tags.csv"},
         prep="bgr_wd", tag_source="csv",
+    )
+
+
+def _cl() -> ModelSpec:
+    # cella110n/cl_tagger：架构异构（pad+BICUBIC+BGR+mean/std 归一化、logits 需 sigmoid、
+    # tag_mapping.json 8 类分桶），由独立 CLTagger 类处理（不进 OnnxTagger）。
+    base = f"{_HF}/cella110n/cl_tagger/resolve/main/cl_tagger_1_01"
+    return ModelSpec(
+        key="cl_tagger", label="CL Tagger", folder="cl_tagger",
+        files={"model.onnx": f"{base}/model.onnx",
+               "tag_mapping.json": f"{base}/tag_mapping.json"},
+        prep="cl", tag_source="cl_json",
     )
 
 
@@ -39,6 +51,7 @@ MODEL_SPECS: dict[str, ModelSpec] = {
         prep="ddb", tag_source="txt",
     ),
     "e621": _wd("e621", "E621", "e621", "Z3D-E621-Convnext", owner="silveroxides"),
+    "cl_tagger": _cl(),
 }
 
 DEFAULT_MODEL_KEY = "wd14"
