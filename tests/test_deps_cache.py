@@ -1,0 +1,39 @@
+import pytest
+from backend import deps
+from backend.tagger.core import OnnxTagger
+
+
+def test_get_tagger_returns_onnx_tagger():
+    deps._reset_tagger_cache()
+    t = deps.get_tagger("wd14")
+    assert isinstance(t, OnnxTagger)
+
+
+def test_get_tagger_caches_per_key():
+    deps._reset_tagger_cache()
+    a = deps.get_tagger("wd14")
+    b = deps.get_tagger("wd14")
+    assert a is b  # 同 key 同实例
+
+
+def test_get_tagger_different_keys_different_instances():
+    deps._reset_tagger_cache()
+    a = deps.get_tagger("wd14")
+    b = deps.get_tagger("e621")
+    assert a is not b
+    assert a.spec.key == "wd14"
+    assert b.spec.key == "e621"
+
+
+def test_get_tagger_unknown_key_raises():
+    deps._reset_tagger_cache()
+    with pytest.raises(ValueError):
+        deps.get_tagger("nope")
+
+
+def test_reset_clears_cache():
+    deps._reset_tagger_cache()
+    a = deps.get_tagger("wd14")
+    deps._reset_tagger_cache()
+    b = deps.get_tagger("wd14")
+    assert a is not b  # 重置后是新实例

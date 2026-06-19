@@ -18,7 +18,7 @@ def _clear_dep_caches():
     # 清空 deps 单例缓存，保证每个测试用各自 monkeypatch 的 IMAGES_DIR
     deps.get_storage.cache_clear()
     deps.get_classifier.cache_clear()
-    deps.get_tagger.cache_clear()
+    deps._reset_tagger_cache()
     yield
 
 
