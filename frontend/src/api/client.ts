@@ -8,6 +8,15 @@ export async function uploadImages(files: File[]): Promise<{ ids: string[] }> {
   return r.json()
 }
 
+export async function uploadOne(file: File): Promise<{ id: string }> {
+  const fd = new FormData()
+  fd.append('files', file)
+  const r = await fetch(`${base}/api/images`, { method: 'POST', body: fd })
+  if (!r.ok) throw new Error(await r.text())
+  const data = await r.json()
+  return { id: data.ids[0] }
+}
+
 export async function listImages(page = 1, size = 24) {
   return fetch(`${base}/api/images?page=${page}&size=${size}`).then(r => r.json())
 }
