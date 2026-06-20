@@ -105,6 +105,13 @@ export async function downloadTagger(key: string): Promise<{ key: string; downlo
   return fetch(`${base}/api/taggers/${key}/download`, { method: 'POST' }).then(r => r.json())
 }
 
+// 卸载所有已加载模型（从内存/显存释放 ONNX session，不删文件；下次反推重新加载）
+export async function unloadAllTaggers(): Promise<{ released: string[] }> {
+  const r = await fetch(`${base}/api/taggers/unload-all`, { method: 'POST' })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
 export interface PromptboxItem {
   id: string
   title: string

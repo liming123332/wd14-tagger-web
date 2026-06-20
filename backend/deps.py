@@ -45,3 +45,24 @@ def get_tagger(model_key: str = DEFAULT_MODEL_KEY):
 def _reset_tagger_cache() -> None:
     """测试隔离：清空多模型实例缓存。"""
     _tagger_cache.clear()
+
+
+def _release_taggers() -> list[str]:
+    """运行期卸载：close 所有已加载的 ONNX session（释放 RAM/GPU 显存 + 文件句柄），
+    清空多模型缓存并强制 GC。返回被释放的 model key 列表。
+    不删任何模型文件——下次 get_tagger() 会重新 lazy-load。
+    区别于 _reset_tagger_cache：后者仅 clear（测试隔离用），不 close session、不 GC，
+    无法释放 onnxruntime 占用的显存。"""
+    import gc
+    released: list[str] = []
+    for key, t in list(_tagger_cache.items()):
+        s = getattr(t, "session", None)
+        if s is not None:
+            try:
+                s.close()  # onnxruntime InferenceSession.close() 释放显存/文件句柄
+            except Exception:
+                pass
+        released.append(key)
+    _tagger_cache.clear()
+    gc.collect()  # 兜底：强制回收已无引用的 session 对象
+    return released

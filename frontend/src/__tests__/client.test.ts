@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { uploadOne, listImages, randomImages, listTags, applyCategoryRules, tagImage, startBatch, listTaggers, downloadTagger, splitPrompt, listPromptbox, savePromptbox, deletePromptbox, analyzePromptbox, tagPromptbox, reclassifyPromptbox } from '../api/client'
+import { uploadOne, listImages, randomImages, listTags, applyCategoryRules, tagImage, startBatch, listTaggers, downloadTagger, unloadAllTaggers, splitPrompt, listPromptbox, savePromptbox, deletePromptbox, analyzePromptbox, tagPromptbox, reclassifyPromptbox } from '../api/client'
 
 describe('uploadOne', () => {
   beforeEach(() => { vi.unstubAllGlobals() })
@@ -174,6 +174,25 @@ describe('downloadTagger', () => {
     expect(seen[0].url).toBe('/api/taggers/wd3/download')
     expect(seen[0].method).toBe('POST')
     expect(r).toEqual({ key: 'wd3', downloaded: true })
+  })
+})
+
+describe('unloadAllTaggers', () => {
+  beforeEach(() => { vi.unstubAllGlobals() })
+  it('POST /api/taggers/unload-all 返回 released', async () => {
+    const seen: any[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, opts: any) => {
+      seen.push({ url, method: opts.method })
+      return { ok: true, json: async () => ({ released: ['wd14', 'cl_tagger_v2'] }) } as any
+    }))
+    const r = await unloadAllTaggers()
+    expect(seen[0].url).toBe('/api/taggers/unload-all')
+    expect(seen[0].method).toBe('POST')
+    expect(r).toEqual({ released: ['wd14', 'cl_tagger_v2'] })
+  })
+  it('失败时抛错', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, text: async () => 'busy' }) as any))
+    await expect(unloadAllTaggers()).rejects.toThrow('busy')
   })
 })
 

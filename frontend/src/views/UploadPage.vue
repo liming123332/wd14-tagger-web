@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, h } from 'vue'
-import { NUpload, NButton, NSlider, NSwitch, NSpace, NCard, NDynamicTags, useMessage } from 'naive-ui'
+import { NUpload, NButton, NSlider, NSwitch, NSpace, NCard, NDynamicTags, NPopconfirm, useMessage } from 'naive-ui'
 import { NSelect, NTag } from 'naive-ui'
 import { useTagger } from '../composables/useTagger'
 import { useRouter } from 'vue-router'
@@ -65,6 +65,14 @@ async function go() {
     msg.success('已提交处理')
   } catch (e: any) { msg.error('提交失败：' + e.message) }
 }
+
+// 卸载已加载模型：释放内存/显存（不删文件），下次反推重新加载。
+async function onUnload() {
+  try {
+    await tagger.unloadAll()
+    msg.success('已释放，下次反推将重新加载')
+  } catch (e: any) { msg.error('卸载失败：' + e.message) }
+}
 </script>
 
 <template>
@@ -110,6 +118,17 @@ async function go() {
         <n-button v-if="state.batchId" @click="router.push('/batch/' + state.batchId)">查看详情</n-button>
         <n-button @click="router.push('/gallery')">前往图库</n-button>
       </n-space>
+      <div style="margin-top:12px">
+        <!-- 卸载=从内存/显存释放已加载 session（不删文件）；批次进行中/下载中禁用，避免 close 掉正在用的 session -->
+        <n-popconfirm @positive-click="onUnload">
+          <template #trigger>
+            <n-button :loading="tagger.state.unloading" :disabled="isBusy() || !!tagger.state.downloading">
+              卸载已加载模型（释放内存/显存）
+            </n-button>
+          </template>
+          释放所有已加载模型占用的内存/显存？下次反推会重新加载。
+        </n-popconfirm>
+      </div>
     </n-card>
     <n-card v-if="state.phase !== 'idle'" title="进度">
       <BatchBars :uploaded="state.uploaded" :tagged="state.tagged" :total="state.total" />

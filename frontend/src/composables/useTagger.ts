@@ -1,5 +1,5 @@
 import { reactive } from 'vue'
-import { listTaggers, downloadTagger, type TaggerInfo } from '../api/client'
+import { listTaggers, downloadTagger, unloadAllTaggers, type TaggerInfo } from '../api/client'
 
 const LS_KEY = 'wd14-tagger.lastModel'
 const DEFAULT_MODEL = 'wd14'
@@ -8,6 +8,7 @@ interface TaggerState {
   selected: string
   taggers: TaggerInfo[]
   downloading: string | null
+  unloading: boolean
 }
 
 // 模块级单例（同 useBatch）：跨组件共享当前选中模型。
@@ -15,6 +16,7 @@ const state = reactive<TaggerState>({
   selected: localStorage.getItem(LS_KEY) || DEFAULT_MODEL,
   taggers: [],
   downloading: null,
+  unloading: false,
 })
 
 function persist() {
@@ -56,6 +58,17 @@ async function download(key: string) {
   }
 }
 
+// 卸载所有已加载模型（从内存/显存释放 ONNX session，不删文件；下次反推重新加载）。
+// 不需要 refresh——下载状态（文件在不在）没变，仅后端内存态变了。
+async function unloadAll() {
+  state.unloading = true
+  try {
+    await unloadAllTaggers()
+  } finally {
+    state.unloading = false
+  }
+}
+
 export function useTagger() {
-  return { state, setSelected, refresh, isDownloaded, download }
+  return { state, setSelected, refresh, isDownloaded, download, unloadAll }
 }

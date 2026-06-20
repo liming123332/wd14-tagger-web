@@ -18,6 +18,7 @@ const taggerState: any = {
   selected: 'wd14',
   taggers: [{ key: 'wd14', label: 'WD14', downloaded: true }],
   downloading: null,
+  unloading: false,
 }
 vi.mock('../composables/useTagger', () => ({
   useTagger: () => ({
@@ -26,6 +27,7 @@ vi.mock('../composables/useTagger', () => ({
     refresh: vi.fn(async () => {}),
     isDownloaded: (k: string) => taggerState.taggers.some((t: any) => t.key === k && t.downloaded),
     download: vi.fn(async () => {}),
+    unloadAll: vi.fn(async () => {}),
   }),
 }))
 
@@ -102,5 +104,18 @@ describe('UploadPage', () => {
     await w.vm.$nextTick()
     // render-label 是 prop，trigger 也调用它 → 「已下载」文本出现在关闭态
     expect(w.text()).toContain('已下载')
+  })
+
+  it('渲染「卸载已加载模型」按钮，批次进行中禁用', async () => {
+    const { state } = useBatch()
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({}) }) as any))
+    const w = mount(UploadPage, { global: { stubs: { NMenu: true } } })
+    const btn = w.findAll('button').find(b => b.text().includes('卸载已加载模型'))
+    expect(btn).toBeTruthy()
+    expect((btn!.element as HTMLButtonElement).disabled).toBe(false)
+    state.phase = 'uploading'
+    await w.vm.$nextTick()
+    // 批次进行中不能卸载，避免 close 掉正在用的 session
+    expect((btn!.element as HTMLButtonElement).disabled).toBe(true)
   })
 })
