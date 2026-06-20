@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import UploadPage from './views/UploadPage.vue'
+import PathTagPage from './views/PathTagPage.vue'
 import GalleryPage from './views/GalleryPage.vue'
 import DetailPage from './views/DetailPage.vue'
 import BatchDetailPage from './views/BatchDetailPage.vue'
@@ -14,6 +15,7 @@ export const router = createRouter({
   routes: [
     { path: '/', redirect: '/gallery' },
     { path: '/upload', component: UploadPage },
+    { path: '/pathtag', component: PathTagPage },
     { path: '/gallery', component: GalleryPage },
     { path: '/random', component: RandomPage },
     { path: '/detail/:id', component: DetailPage, props: true },

@@ -11,7 +11,7 @@ import { lightOverrides, darkOverrides } from './styles/theme'
 import { useTheme } from './composables/useTheme'
 import {
   IconUpload, IconGallery, IconRandom, IconStar, IconEdit, IconSettings,
-  IconSun, IconMoon, IconMonitor,
+  IconSun, IconMoon, IconMonitor, IconFolderTag,
 } from './components/icons'
 
 const router = useRouter()
@@ -23,6 +23,7 @@ const overrides = computed(() => (effective.value === 'dark' ? darkOverrides : l
 
 const ITEMS = [
   { label: '上传', key: '/upload', icon: IconUpload },
+  { label: '路径打标', key: '/pathtag', icon: IconFolderTag },
   { label: '图库', key: '/gallery', icon: IconGallery },
   { label: '随机', key: '/random', icon: IconRandom },
   { label: '收藏列表', key: '/collections', icon: IconStar },
