@@ -15,7 +15,7 @@ WD14 Tagger Web 便携整合包打包脚本（可重复执行）
 升级流程（软件更新后）:
     1. 改完源码、cd frontend && npm run build（前端有改动时）
     2. 重跑 python pack_portable.py（runtime 已存在会跳过，只刷新源码）
-    3. 把整个 <PKG_ROOT> 重新发出去；或只压缩 wd14-tagger-web\ 让对方覆盖
+    3. 把整个 <PKG_ROOT> 重新发出去；或只压缩 wd14-tagger-web 让对方覆盖
 """
 from __future__ import annotations
 import argparse
@@ -57,13 +57,27 @@ def run(cmd: list[str], **kw) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, check=True, **kw)
 
 
-def download(url: str, dest: Path) -> None:
+def download(url: str, dest: Path, retries: int = 5) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
+    if dest.exists() and dest.stat().st_size > 0:
+        log(f"已存在，跳过: {dest.name}")
+        return
     log(f"下载 {url} -> {dest}")
-    req = urllib.request.Request(url, headers={"User-Agent": "pack_portable/1.0"})
-    with urllib.request.urlopen(req, timeout=120) as r, open(dest, "wb") as f:
-        shutil.copyfileobj(r, f)
-    log(f"  完成 {dest.stat().st_size // 1024} KB")
+    import time
+    last_err: Exception | None = None
+    for attempt in range(1, retries + 1):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "pack_portable/1.0"})
+            with urllib.request.urlopen(req, timeout=120) as r, open(dest, "wb") as f:
+                shutil.copyfileobj(r, f)
+            log(f"  完成 {dest.stat().st_size // 1024} KB")
+            return
+        except Exception as e:  # 国内访问境外源常 SSL 断/超时，删半成品重试
+            last_err = e
+            dest.unlink(missing_ok=True)
+            log(f"  失败(尝试 {attempt}/{retries}): {e}")
+            time.sleep(3)
+    raise RuntimeError(f"下载失败（{retries} 次重试后仍失败）: {url}\n  最近错误: {last_err}")
 
 
 def prepare_runtime(force: bool) -> None:
