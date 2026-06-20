@@ -72,7 +72,8 @@ const charLabel = computed(() => isCl.value ? '角色名称识别阈值（仅 cl
 let modelChangeFromInit = false
 watch(localModel, (m) => {
   if (modelChangeFromInit) { modelChangeFromInit = false; return }
-  charTh.value = m === 'cl_tagger' ? 0.6 : 0.9
+  if (m === 'cl_tagger_v2') { genTh.value = 0.55; charTh.value = 0.55 }
+  else { charTh.value = m === 'cl_tagger' ? 0.6 : 0.9 }
 })
 
 function emptyCats(): Record<string, string[]> {

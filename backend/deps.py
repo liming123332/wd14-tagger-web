@@ -34,6 +34,9 @@ def get_tagger(model_key: str = DEFAULT_MODEL_KEY):
         if spec.prep == "cl":
             from backend.tagger.cl_tagger import CLTagger  # 延迟 import 避免循环/加载开销
             _tagger_cache[model_key] = CLTagger(spec)
+        elif spec.prep == "cl_v2":
+            from backend.tagger.cl_tagger_v2 import CLTaggerV2
+            _tagger_cache[model_key] = CLTaggerV2(spec)
         else:
             _tagger_cache[model_key] = OnnxTagger(spec)
     return _tagger_cache[model_key]

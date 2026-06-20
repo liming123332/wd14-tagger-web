@@ -42,7 +42,12 @@ async function doDownload() {
 // 标签体现「仅 cl_tagger 生效」（cl 专门训练角色/版权识别，阈值与文案单独区分）。
 const isCl = computed(() => tagger.state.selected === 'cl_tagger')
 const charLabel = computed(() => isCl.value ? '角色名称识别阈值（仅 cl_tagger 生效）' : '角色阈值')
-watch(() => tagger.state.selected, () => { charTh.value = isCl.value ? 0.6 : 0.9 }, { immediate: true })
+// cl_tagger 角色阈值 0.6；cl_tagger_v2 单阈值运营（SigLIP2，文档推荐 0.55），切换时把 genTh 设到 0.55
+// （v2 不区分角色阈值，charTh 仅为接口一致保留，设同值无副作用）。其余模型角色阈值 0.9。
+watch(() => tagger.state.selected, (m) => {
+  if (m === 'cl_tagger_v2') { genTh.value = 0.55; charTh.value = 0.55 }
+  else { charTh.value = isCl.value ? 0.6 : 0.9 }
+}, { immediate: true })
 // n-upload 受控文件列表：关掉默认列表后用 v-model 受控，便于「清空」重置上传组件内部状态
 const fileList = ref<any[]>([])
 

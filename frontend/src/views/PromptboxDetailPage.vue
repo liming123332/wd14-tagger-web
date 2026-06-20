@@ -68,7 +68,8 @@ const charLabel = computed(() => localModel.value === 'cl_tagger' ? '角色名�
 let modelChangeFromLoad = false
 watch(localModel, (m) => {
   if (modelChangeFromLoad) { modelChangeFromLoad = false; return }
-  charTh.value = m === 'cl_tagger' ? 0.6 : 0.9
+  if (m === 'cl_tagger_v2') { genTh.value = 0.55; charTh.value = 0.55 }
+  else { charTh.value = m === 'cl_tagger' ? 0.6 : 0.9 }
 })
 
 function fromItem(it: PromptboxItem) {
