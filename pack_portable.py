@@ -1,0 +1,241 @@
+# -*- coding: utf-8 -*-
+"""
+WD14 Tagger Web 便携整合包打包脚本（可重复执行）
+
+产物结构（SD 整合包风格：runtime 与源码分离，便于升级）：
+    <PKG_ROOT>/
+      runtime/             便携 Python + 依赖（固定，升级不动）
+      wd14-tagger-web/     源码（升级时整体替换即可）
+      启动.bat / 使用说明.txt / 更新说明.txt
+
+用法:
+    python pack_portable.py                 # 首次打包 / 增量更新源码
+    python pack_portable.py --force-runtime # 强制重建 runtime（依赖变动时）
+
+升级流程（软件更新后）:
+    1. 改完源码、cd frontend && npm run build（前端有改动时）
+    2. 重跑 python pack_portable.py（runtime 已存在会跳过，只刷新源码）
+    3. 把整个 <PKG_ROOT> 重新发出去；或只压缩 wd14-tagger-web\ 让对方覆盖
+"""
+from __future__ import annotations
+import argparse
+import shutil
+import subprocess
+import sys
+import urllib.request
+import zipfile
+from pathlib import Path
+
+# ===== 配置 =====
+PY_VERSION = "3.10.11"
+EMBED_URL = f"https://www.python.org/ftp/python/{PY_VERSION}/python-{PY_VERSION}-embed-amd64.zip"
+GETPIP_URL = "https://bootstrap.pypa.io/get-pip.py"
+VCREDIST_URL = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
+
+# 脚本位于项目根 wd14-tagger-web/ 内，故源码根 = 脚本所在目录；
+# 整合包输出到项目外的兄弟目录，避免被打进包里、便于升级时单独替换源码。
+SRC_ROOT = Path(__file__).resolve().parent
+PKG_ROOT = SRC_ROOT.parent / "WD14-Tagger-Web-Portable"
+
+# 拷源码时排除的目录/文件
+EXCLUDE_DIRS = {".venv", "node_modules", "__pycache__", ".git",
+                ".pytest_cache", ".vscode"}  # 注意：frontend/dist 必须保留（后端托管）
+EXCLUDE_FILE_SUFFIXES = (".pyc", ".pyo")
+
+
+def log(msg: str) -> None:
+    print(f"[pack] {msg}", flush=True)
+
+
+def run(cmd: list[str], **kw) -> subprocess.CompletedProcess:
+    log("$ " + " ".join(str(c) for c in cmd))
+    return subprocess.run(cmd, check=True, **kw)
+
+
+def download(url: str, dest: Path) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    log(f"下载 {url} -> {dest}")
+    req = urllib.request.Request(url, headers={"User-Agent": "pack_portable/1.0"})
+    with urllib.request.urlopen(req, timeout=120) as r, open(dest, "wb") as f:
+        shutil.copyfileobj(r, f)
+    log(f"  完成 {dest.stat().st_size // 1024} KB")
+
+
+def prepare_runtime(force: bool) -> None:
+    runtime = PKG_ROOT / "runtime"
+    pyexe = runtime / "python.exe"
+    if pyexe.exists() and not force:
+        log("runtime 已存在，跳过（依赖变动请用 --force-runtime 重建）")
+        return
+    if runtime.exists():
+        shutil.rmtree(runtime)
+    runtime.mkdir(parents=True)
+
+    # 1. 下载并解压 embed python
+    zip_path = PKG_ROOT / "_python-embed.zip"
+    download(EMBED_URL, zip_path)
+    log("解压 embed python ...")
+    with zipfile.ZipFile(zip_path) as z:
+        z.extractall(runtime)
+    zip_path.unlink()
+
+    # 2. 启用 site（embed 默认注释了 import site，导致 site-packages 不加载、pip 不可用）
+    pth_files = list(runtime.glob("python*._pth"))
+    assert pth_files, "未找到 python*._pth"
+    pth = pth_files[0]
+    txt = pth.read_text(encoding="utf-8")
+    txt = txt.replace("#import site", "import site")
+    pth.write_text(txt, encoding="utf-8")
+    log(f"已启用 site: {pth.name}")
+
+    # 3. 装 pip
+    getpip = runtime / "get-pip.py"
+    download(GETPIP_URL, getpip)
+    run([str(pyexe), str(getpip), "--no-warn-script-location"])
+    getpip.unlink()
+
+    # 4. 装依赖
+    log("安装依赖（首次较慢，onnxruntime ~200MB）...")
+    run([str(pyexe), "-m", "pip", "install", "--upgrade",
+         "-r", str(SRC_ROOT / "requirements.txt")])
+
+    # 5. 验证关键依赖可 import
+    run([str(pyexe), "-c",
+         "import onnxruntime, fastapi, uvicorn, numpy, PIL, yaml, multipart, pydantic; "
+         "print('runtime deps OK, onnxruntime', onnxruntime.__version__)"])
+    log("runtime 就绪")
+
+
+def _ignore_when_copy(directory: Path, names: list[str]) -> set[str]:
+    ignore = set()
+    for n in names:
+        if n in EXCLUDE_DIRS:
+            ignore.add(n)
+        if any(n.endswith(s) for s in EXCLUDE_FILE_SUFFIXES):
+            ignore.add(n)
+    return ignore
+
+
+def copy_source() -> None:
+    dest = PKG_ROOT / "wd14-tagger-web"
+    if dest.exists():
+        shutil.rmtree(dest)
+    log(f"拷贝源码 {SRC_ROOT} -> {dest}（排除 .venv/node_modules/.git 等）")
+    shutil.copytree(SRC_ROOT, dest, ignore=_ignore_when_copy)
+
+    # 确保前端已构建；若源里 frontend/dist 缺失，提示（不自动 npm build，避免依赖 node）
+    if not (dest / "frontend" / "dist" / "index.html").exists():
+        log("⚠️ 警告: frontend/dist/index.html 不存在！请先 cd frontend && npm run build 后重打包")
+    else:
+        log("frontend/dist 已就绪（后端将托管）")
+
+    # 清空用户数据与模型内容，保留空目录（用户自己拷模型 / 生成数据）
+    for sub in ("models", "data/images", "data/promptbox"):
+        d = dest / sub
+        d.mkdir(parents=True, exist_ok=True)
+        for p in list(d.iterdir()):
+            if p.is_dir():
+                shutil.rmtree(p)
+            else:
+                p.unlink()
+    log("已清空 models/ 与 data/ 用户数据（保留空目录）")
+
+
+def write_launchers() -> None:
+    # 启动.bat：cwd=源码目录（让 ROOT 自动推断正确），用 runtime 的 python 起 uvicorn，
+    # 后台延迟 3 秒打开浏览器（等 uvicorn 起来）。
+    start_bat = PKG_ROOT / "启动.bat"
+    start_bat.write_text(
+        "@echo off\r\n"
+        "chcp 65001 >nul\r\n"
+        'cd /d "%~dp0wd14-tagger-web"\r\n'
+        "echo.\r\n"
+        "echo ===== WD14 Tagger Web =====\r\n"
+        "echo 浏览器访问: http://127.0.0.1:8000\r\n"
+        "echo 关闭本窗口即停止服务\r\n"
+        "echo ============================\r\n"
+        "echo.\r\n"
+        'start "" cmd /c "timeout /t 3 >nul && start http://127.0.0.1:8000"\r\n'
+        '"%~dp0runtime\\python.exe" -m uvicorn backend.main:app --host 127.0.0.1 --port 8000\r\n'
+        "echo.\r\n"
+        "echo 服务已停止。\r\n"
+        "pause\r\n",
+        encoding="utf-8",
+    )
+    log(f"写入 {start_bat.name}")
+
+    usage = PKG_ROOT / "使用说明.txt"
+    usage.write_text(
+        "WD14 Tagger Web 使用说明\n"
+        "========================\n\n"
+        "1. 首次使用：把模型文件夹拷到 wd14-tagger-web\\models\\ 下。\n"
+        "   （例如 models\\wd14\\、models\\cl_tagger\\、models\\cl_tagger_v2_01a\\ 等，\n"
+        "    文件夹名要和程序里一致；不知道就全拷进去。）\n\n"
+        "2. 双击「启动.bat」，会自动打开浏览器访问 http://127.0.0.1:8000\n"
+        "   （若浏览器没自动开，手动打开浏览器输入这个地址）。\n\n"
+        "3. 用完关闭弹出的黑色命令行窗口即可停止服务。\n\n"
+        "常见问题：\n"
+        "- 启动报错「找不到 xxx.dll」或一闪而过：双击本目录下的 vc_redist.x64.exe\n"
+        "  安装微软运行库后重启电脑再试（一般 Win10/11 已自带，多数不用装）。\n"
+        "- 端口 8000 被占用：关闭其他占用程序，或编辑 启动.bat 把 8000 改成别的端口。\n"
+        "- 反推很慢：CPU 模式正常现象，耐心等待。\n",
+        encoding="utf-8",
+    )
+    log(f"写入 {usage.name}")
+
+    update_note = PKG_ROOT / "更新说明.txt"
+    update_note.write_text(
+        "软件升级说明\n"
+        "============\n\n"
+        "本包采用「整合包」结构：\n"
+        "- runtime\\        便携 Python + 依赖，升级时【不要动】\n"
+        "- wd14-tagger-web\\ 程序源码，【升级时只替换这个目录】\n"
+        "- models\\          你的模型，【不要动】\n"
+        "- data\\            你的图片/提示词数据，【不要动】\n\n"
+        "升级方法（二选一）：\n"
+        "方法 A（推荐）：我把更新后的整个新包发给你，解压后把旧的 models\\ 和 data\\\n"
+        "              拷到新包的 wd14-tagger-web\\ 下覆盖即可。\n"
+        "方法 B：我只发你一个 wd14-tagger-web 源码压缩包，解压后整个覆盖本包的\n"
+        "       wd14-tagger-web\\ 文件夹（models/data 不在里面，不受影响）。\n",
+        encoding="utf-8",
+    )
+    log(f"写入 {update_note.name}")
+
+
+def fetch_vcredist() -> None:
+    """附带微软 VC++ 运行库安装包，对方缺 dll 时可装。"""
+    dest = PKG_ROOT / "vc_redist.x64.exe"
+    if dest.exists():
+        log("vc_redist.x64.exe 已存在，跳过")
+        return
+    try:
+        download(VCREDIST_URL, dest)
+    except Exception as e:
+        log(f"⚠️ 下载 vc_redist 失败（可忽略，多数机器已自带）: {e}")
+
+
+def main() -> None:
+    global PKG_ROOT
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--force-runtime", action="store_true", help="强制重建 runtime")
+    ap.add_argument("--pkg-root", default=str(PKG_ROOT), help="整合包输出目录")
+    ap.add_argument("--no-vcredist", action="store_true", help="不附带 vc_redist")
+    args = ap.parse_args()
+
+    PKG_ROOT = Path(args.pkg_root)
+    PKG_ROOT.mkdir(parents=True, exist_ok=True)
+    log(f"整合包目录: {PKG_ROOT}")
+
+    prepare_runtime(force=args.force_runtime)
+    copy_source()
+    write_launchers()
+    if not args.no_vcredist:
+        fetch_vcredist()
+
+    log("全部完成")
+    log(f"  整合包: {PKG_ROOT}")
+    log(f"  启动:   双击 {PKG_ROOT/'启动.bat'}")
+
+
+if __name__ == "__main__":
+    main()
