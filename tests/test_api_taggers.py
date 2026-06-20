@@ -18,14 +18,15 @@ def _seed_wd14(tmp_path):
         (d / name).write_text("x")
 
 
-def test_list_taggers_returns_eight(tmp_path, monkeypatch):
+def test_list_taggers_returns_ten(tmp_path, monkeypatch):
     client = TestClient(_app(tmp_path, monkeypatch))
     r = client.get("/api/taggers")
     assert r.status_code == 200
     data = r.json()
-    assert len(data) == 8
+    assert len(data) == 10
     assert {x["key"] for x in data} == set(models_spec.MODEL_SPECS.keys())
     assert any(x["key"] == "cl_tagger" for x in data)
+    assert any(x["key"] == "cl_tagger_v2" for x in data)
 
 
 def test_list_taggers_downloaded_flag(tmp_path, monkeypatch):

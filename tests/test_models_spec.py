@@ -3,9 +3,10 @@ import pytest
 from backend.tagger.models_spec import MODEL_SPECS, DEFAULT_MODEL_KEY, is_downloaded, ModelSpec
 
 
-def test_eight_models_present():
+def test_ten_models_present():
     assert set(MODEL_SPECS.keys()) == {
-        "wd14", "wd3", "wd_vit_v3", "wd_eva_v3", "wd_conv_v3", "ddb", "e621", "cl_tagger"
+        "wd14", "wd3", "wd_vit_v3", "wd_vit_large_v3", "wd_eva_v3", "wd_conv_v3", "ddb", "e621",
+        "cl_tagger", "cl_tagger_v2",
     }
     assert DEFAULT_MODEL_KEY == "wd14"
 
@@ -16,8 +17,8 @@ def test_each_spec_has_required_fields():
         assert spec.label  # 非空
         assert spec.folder
         assert "model.onnx" in spec.files  # 第二个文件 csv/txt/json
-        assert spec.prep in ("bgr_wd", "ddb", "cl")
-        assert spec.tag_source in ("csv", "txt", "cl_json")
+        assert spec.prep in ("bgr_wd", "ddb", "cl", "cl_v2")
+        assert spec.tag_source in ("csv", "txt", "cl_json", "cl_v2_json")
 
 
 def test_ddb_uses_txt_and_ddb_prep():
