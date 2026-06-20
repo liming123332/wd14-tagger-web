@@ -1,6 +1,16 @@
 fastapi>=0.110
 uvicorn[standard]>=0.27
-onnxruntime>=1.17
+# === GPU 反推：onnxruntime CUDA EP（RTX50/Blackwell sm_120 需 1.27+）===
+# 下方 nvidia-*-13/cu13 系列提供【完整】CUDA 运行库 DLL，使整合包【无需对方装系统 CUDA toolkit】即可用 GPU
+# （本机同理）。DLL 在 site-packages/nvidia/*/bin，由 backend/tagger/_onnx_providers.py 的
+# _register_cuda_dll_dirs() 在建 session 前 prepend 进 PATH，否则 onnxruntime_providers_cuda.dll 找不到
+# cudnn64_9.dll 等依赖、CUDA EP 静默退回 CPU（Blackwell 上尤其隐蔽：available 有 CUDA 但 session 只剩 CPU）。
+onnxruntime-gpu==1.27.0   # CUDA13 + Blackwell sm_120 内核（1.27 是首个官方 CUDA13 版，旧版会静默退 CPU）
+nvidia-cudnn-cu13         # cudnn64_9.dll（卷积/推理）；依赖链自动拉 nvidia-cublas-13(cublas/cublasLt) + nvidia-cuda-nvrtc-13
+nvidia-cuda-runtime       # cudart64_13.dll（CUDA runtime，所有 CUDA DLL 的基础依赖）
+nvidia-cufft              # cufft64_12.dll（onnxruntime_providers_cuda.dll 直接依赖；依赖自动拉 nvidia-nvjitlink）
+nvidia-curand             # curand64_10.dll（随机数，onnxruntime CUDA EP 声明依赖）
+# === 业务依赖 ===
 numpy>=1.26
 pillow>=10.0
 pyyaml>=6.0

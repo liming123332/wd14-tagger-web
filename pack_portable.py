@@ -32,7 +32,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
 # ===== 配置 =====
-PY_VERSION = "3.10.11"
+PY_VERSION = "3.13.14"  # onnxruntime-gpu 1.27（支持 RTX50/Blackwell sm_120）的 wheel 仅 cp311+，故从 3.10 升到 3.13
 EMBED_URL = f"https://www.python.org/ftp/python/{PY_VERSION}/python-{PY_VERSION}-embed-amd64.zip"
 GETPIP_URL = "https://bootstrap.pypa.io/get-pip.py"
 VCREDIST_URL = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
@@ -99,10 +99,19 @@ def prepare_runtime(force: bool) -> None:
     run([str(pyexe), str(getpip), "--no-warn-script-location"])
     getpip.unlink()
 
-    # 4. 装依赖
-    log("安装依赖（首次较慢，onnxruntime ~200MB）...")
-    run([str(pyexe), "-m", "pip", "install", "--upgrade",
-         "-r", str(SRC_ROOT / "requirements.txt")])
+    # 4. 装依赖。用清华镜像（国内下 onnxruntime/cudnn/cublas 等几百 MB 大文件稳），
+    #    并复用 SRC_ROOT/_dl 下已下载的 nvidia CUDA wheel（--find-links，避免重复下大文件）。
+    log("安装依赖（首次较慢：onnxruntime~213MB + cudnn~403MB + cublas~373MB + cufft~175MB 等）...")
+    install_cmd = [str(pyexe), "-m", "pip", "install", "--upgrade",
+                   "-r", str(SRC_ROOT / "requirements.txt"),
+                   "-i", "https://pypi.tuna.tsinghua.edu.cn/simple",
+                   "--extra-index-url", "https://pypi.org/simple",
+                   "--retries", "5", "--timeout", "180"]
+    dl_dir = SRC_ROOT / "_dl"
+    if dl_dir.is_dir():
+        install_cmd += ["--find-links", str(dl_dir)]
+        log(f"  复用已下载 wheel: {dl_dir}")
+    run(install_cmd)
 
     # 5. 验证关键依赖可 import
     run([str(pyexe), "-c",

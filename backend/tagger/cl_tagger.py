@@ -10,6 +10,7 @@ from PIL import Image
 
 from backend.config import settings
 from backend.tagger.models_spec import ModelSpec
+from backend.tagger._onnx_providers import select_providers
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,6 @@ class CLTagger:
                 raise
 
     def _load(self) -> None:
-        import onnxruntime as ort
         from onnxruntime import InferenceSession
 
         onnx_path = self.model_dir / "model.onnx"
@@ -76,13 +76,7 @@ class CLTagger:
         if not mapping_path.exists():
             raise FileNotFoundError(f"tag_mapping.json missing in {self.model_dir}")
 
-        providers = ["CPUExecutionProvider"]
-        try:
-            if "CUDAExecutionProvider" in set(ort.get_available_providers()):
-                providers.insert(0, "CUDAExecutionProvider")
-        except Exception:
-            pass
-        self.session = InferenceSession(str(onnx_path), providers=providers)
+        self.session = InferenceSession(str(onnx_path), providers=select_providers())
         logger.info("%s ONNX providers: %s", self.spec.key, self.session.get_providers())
         self.input_name = self.session.get_inputs()[0].name
 
