@@ -91,6 +91,37 @@ export function subscribeBatch(
   return es
 }
 
+// 路径打标：提交本地文件夹路径，后端展开图片反推并写同名 .txt，返回 job_id/total
+export interface PathTagPayload {
+  path: string
+  model: string
+  gen_th: number
+  char_th: number
+  use_char: boolean
+  recursive: boolean
+  on_conflict: 'overwrite' | 'skip'
+}
+
+export async function startPathTag(payload: PathTagPayload): Promise<{ job_id: string; total: number }> {
+  const r = await fetch(`${base}/api/pathtag/start`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export function subscribePathTag(jobId: string, onEvent: (e: any) => void, onDisconnect?: () => void) {
+  const es = new EventSource(`${base}/api/pathtag/${jobId}/events`)
+  es.onmessage = (m) => {
+    const data = JSON.parse(m.data)
+    onEvent(data)
+    if (data.type === 'done') es.close()
+  }
+  es.onerror = () => { es.close(); onDisconnect?.() }
+  return es
+}
+
 export function fileUrl(id: string, name: string) {
   return `${base}/api/images/${id}/file/${name}`
 }

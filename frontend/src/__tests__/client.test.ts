@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { uploadOne, listImages, randomImages, listTags, applyCategoryRules, tagImage, startBatch, listTaggers, downloadTagger, unloadAllTaggers, splitPrompt, listPromptbox, savePromptbox, deletePromptbox, analyzePromptbox, tagPromptbox, reclassifyPromptbox } from '../api/client'
+import { uploadOne, listImages, randomImages, listTags, applyCategoryRules, tagImage, startBatch, listTaggers, downloadTagger, unloadAllTaggers, splitPrompt, listPromptbox, savePromptbox, deletePromptbox, analyzePromptbox, tagPromptbox, reclassifyPromptbox, startPathTag, subscribePathTag } from '../api/client'
 
 describe('uploadOne', () => {
   beforeEach(() => { vi.unstubAllGlobals() })
@@ -305,5 +305,45 @@ describe('reclassifyPromptbox', () => {
     await reclassifyPromptbox('id1', { head: ['my tag'] })
     expect(seen[0].url).toBe('/api/promptbox/id1/reclassify')
     expect(JSON.parse(seen[0].body)).toEqual({ keep: { head: ['my tag'] } })
+  })
+})
+
+describe('startPathTag', () => {
+  beforeEach(() => { vi.unstubAllGlobals() })
+  it('POST /api/pathtag/start 带 payload，返回 job_id/total', async () => {
+    const seen: any[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, opts: any) => {
+      seen.push({ url, method: opts.method, body: opts.body })
+      return { ok: true, json: async () => ({ job_id: 'P1', total: 3 }) } as any
+    }))
+    const r = await startPathTag({ path: 'I:/imgs', model: 'cl_tagger_v2', gen_th: 0.55, char_th: 0.55, use_char: true, recursive: false, on_conflict: 'overwrite' })
+    expect(seen[0].url).toBe('/api/pathtag/start')
+    expect(seen[0].method).toBe('POST')
+    expect(JSON.parse(seen[0].body)).toMatchObject({ path: 'I:/imgs', model: 'cl_tagger_v2', on_conflict: 'overwrite' })
+    expect(r).toEqual({ job_id: 'P1', total: 3 })
+  })
+  it('失败时抛错', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, text: async () => 'nope' }) as any))
+    await expect(startPathTag({ path: 'x', model: 'cl_tagger_v2', gen_th: 0.55, char_th: 0.55, use_char: true, recursive: false, on_conflict: 'overwrite' })).rejects.toThrow('nope')
+  })
+})
+
+describe('subscribePathTag', () => {
+  beforeEach(() => { vi.unstubAllGlobals() })
+  it('订阅 /api/pathtag/{id}/events，progress 推回调、done 时 close', () => {
+    let urlSeen = ''
+    vi.stubGlobal('EventSource', class {
+      onmessage: any = null
+      onerror: any = null
+      close = vi.fn()
+      constructor(url: string) { urlSeen = url }
+    })
+    const events: any[] = []
+    const es: any = subscribePathTag('J1', (e) => events.push(e))
+    expect(urlSeen).toBe('/api/pathtag/J1/events')
+    es.onmessage({ data: JSON.stringify({ type: 'progress', done: 1, total: 2, current: 'a.png', status: 'ok' }) })
+    es.onmessage({ data: JSON.stringify({ type: 'done', done: 2, total: 2 }) })
+    expect(events.map(e => e.type)).toEqual(['progress', 'done'])
+    expect(es.close).toHaveBeenCalled()
   })
 })
