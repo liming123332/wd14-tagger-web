@@ -254,12 +254,12 @@ function removeItem(idx: number) {
 .thumb { width: 100%; height: 160px; overflow: hidden }
 .thumb.placeholder {
   display: flex; align-items: center; justify-content: center;
-  color: #999; background: #f5f5f5; font-size: 13px;
+  color: var(--cat-input-color, #999); background: var(--cat-panel-bg, #f5f5f5); font-size: 13px;
 }
 .thumb :deep(.n-image) { display: block; width: 100%; height: 160px }
 .thumb :deep(.n-image img) { width: 100%; height: 100%; object-fit: contain; display: block }
 .prompt {
-  font-size: 11px; color: #666; margin-top: 4px; margin-bottom: 4px;
+  font-size: 11px; color: var(--cat-input-color, #666); margin-top: 4px; margin-bottom: 4px;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 </style>

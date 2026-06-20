@@ -139,7 +139,7 @@ async function copyPrompt() {
           </div>
           <div>通用 <n-input-number v-model:value="genTh" :step="0.05" :min="0" :max="1" size="small" style="width:96px" /> / {{ charLabel }} <n-input-number v-model:value="charTh" :step="0.05" :min="0" :max="1" size="small" style="width:96px" /></div>
           <div style="margin-top:6px">
-            <div style="color:#888;margin-bottom:2px">自定义标签（用于图库筛选）</div>
+            <div style="color:var(--cat-input-color,#888);margin-bottom:2px">自定义标签（用于图库筛选）</div>
             <n-dynamic-tags :value="meta.tags || []" size="small" @update:value="onTags" />
           </div>
         </div>

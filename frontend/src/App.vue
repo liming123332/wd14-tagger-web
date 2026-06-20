@@ -98,6 +98,9 @@ function cycleTheme() {
 </template>
 
 <style scoped>
+/* 侧栏固定视口高：避免被 n-layout 的 align-stretch 拉到主内容高度，
+   导致底部主题钮位置随页签内容长短漂移（短页在视口内、长页需滚到底）。 */
+.sider { position: sticky; top: 0; height: 100vh; align-self: flex-start; }
 .brand { font-size: 15px; font-weight: 700; padding: 16px 18px 8px; letter-spacing: 0.5px }
 .sider-foot { padding: 8px 10px 12px; border-top: 1px solid var(--n-border-color, #eceef1) }
 .topbar {

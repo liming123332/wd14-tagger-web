@@ -24,7 +24,7 @@ onMounted(shuffle)
 <template>
   <div style="margin-bottom:12px">
     <n-button type="primary" size="small" :loading="loading" @click="shuffle"><IconRandom/> 再抽一页</n-button>
-    <span style="font-size:12px;color:#888;margin-left:8px">从全库随机展示 {{ size }} 张</span>
+    <span style="font-size:12px;color:var(--cat-input-color,#888);margin-left:8px">从全库随机展示 {{ size }} 张</span>
   </div>
   <n-empty v-if="!items.length" description="图库还没有图片，先去上传" />
   <n-grid v-else cols="2 600:3 900:5 1200:6" :x-gap="12" :y-gap="12">

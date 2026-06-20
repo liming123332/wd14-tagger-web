@@ -11,3 +11,5 @@ body {
 .dark .img-wrap { background: #0f1115; }
 .light .no-img { background: #f0f0f2; color: #9ca3af; }
 .dark .no-img { background: #111317; color: #6b7280; }
+.light { --cat-panel-bg: #fafafa; --cat-input-bg: #ffffff; --cat-input-color: #1f2937; }
+.dark { --cat-panel-bg: #1c1f26; --cat-input-bg: #15171c; --cat-input-color: #e5e7eb; }

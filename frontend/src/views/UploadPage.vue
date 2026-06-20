@@ -109,7 +109,7 @@ async function go() {
       <BatchBars :uploaded="state.uploaded" :tagged="state.tagged" :total="state.total" />
       <div v-if="state.phase === 'done'" style="color:#18a058;margin-top:8px"><IconCheck/> 完成（成功 {{ state.tagged }} · 失败 {{ state.failed }}）</div>
       <div v-if="state.phase === 'error'" style="color:#d03050;margin-top:8px">全部上传失败</div>
-      <div v-if="isBusy()" style="font-size:12px;color:#888;margin-top:6px">处理中：{{ state.current }}</div>
+      <div v-if="isBusy()" style="font-size:12px;color:var(--cat-input-color,#888);margin-top:6px">处理中：{{ state.current }}</div>
     </n-card>
   </n-space>
 </template>

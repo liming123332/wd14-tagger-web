@@ -83,9 +83,9 @@ async function copyPhrase() {
 </template>
 
 <style scoped>
-.cat-panel { border-left: 4px solid #888; border-radius: 6px; overflow: hidden; margin-bottom: 10px; background: #fafafa; }
+.cat-panel { border-left: 4px solid #888; border-radius: 6px; overflow: hidden; margin-bottom: 10px; background: var(--cat-panel-bg, #fafafa); }
 .cat-title { color: #fff; font-weight: 600; padding: 4px 10px; }
 .cat-body { padding: 8px 10px; position: relative; }
-.phrase-box { width: 100%; resize: vertical; font-family: inherit; }
+.phrase-box { width: 100%; resize: vertical; font-family: inherit; background: var(--cat-input-bg, #fff); color: var(--cat-input-color, inherit); }
 .drop-hint { position: absolute; inset: 0; background: rgba(0,128,0,.12); display:flex;align-items:center;justify-content:center; }
 </style>

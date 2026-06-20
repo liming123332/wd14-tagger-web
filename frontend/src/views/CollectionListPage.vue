@@ -87,7 +87,7 @@ function goDetail(id: string) { router.push(`/collections/${id}`) }
 <style scoped>
 .title { font-size: 13px; font-weight: 600 }
 .prompt {
-  font-size: 12px; color: #666; margin-top: 4px;
+  font-size: 12px; color: var(--cat-input-color, #666); margin-top: 4px;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden;
 }
