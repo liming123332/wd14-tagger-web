@@ -203,7 +203,8 @@ function removeItem(idx: number) {
       </div>
       <n-space>
         <div>通用阈值 <n-input-number v-model:value="genTh" :step="0.05" :min="0" :max="1" size="small" style="width:96px" /></div>
-        <div>{{ charLabel }} <n-input-number v-model:value="charTh" :step="0.05" :min="0" :max="1" size="small" style="width:96px" /></div>
+        <!-- v2 单阈值不区分角色阈值：隐藏角色框（charTh 仍传 0.55，后端忽略） -->
+        <div v-if="localModel !== 'cl_tagger_v2'">{{ charLabel }} <n-input-number v-model:value="charTh" :step="0.05" :min="0" :max="1" size="small" style="width:96px" /></div>
       </n-space>
       <div style="margin-top:12px">
         <n-input v-model:value="pasteText" type="textarea" :rows="2" placeholder="或粘贴提示词，逗号或换行分隔" />

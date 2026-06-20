@@ -134,9 +134,9 @@ describe('PromptboxDetailPage', () => {
     }))
     const w = mount(PromptboxDetailPage, { global: { stubs: { NImage: true, NUpload: true } } })
     await flushPromises()
-    // NInputNumber 渲染为 input：v2 强制 0.55/0.55，meta 记的旧值不应出现
+    // NInputNumber 渲染为 input：v2 单阈值，角色框隐藏，仅通用显示 0.55；旧值不应出现
     const vals = w.findAll('input').map(i => (i.element as HTMLInputElement).value)
-    expect(vals.filter(v => v === '0.55').length).toBeGreaterThanOrEqual(2)
+    expect(vals.filter(v => v === '0.55').length).toBe(1)
     expect(vals.filter(v => v === '0.35' || v === '0.9').length).toBe(0)
   })
 })

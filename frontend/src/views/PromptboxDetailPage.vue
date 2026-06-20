@@ -221,7 +221,8 @@ async function copyPrompt() {
               <n-button size="tiny" :loading="tagger.state.downloading===localModel" @click="doDownload">下载</n-button>
             </div>
           </div>
-          <div>通用 <n-input-number v-model:value="genTh" :step="0.05" :min="0" :max="1" size="small" style="width:96px" /> / {{ charLabel }} <n-input-number v-model:value="charTh" :step="0.05" :min="0" :max="1" size="small" style="width:96px" /></div>
+          <!-- v2 单阈值不区分角色阈值：隐藏角色框（charTh 仍保留 0.55 传后端，被忽略） -->
+          <div>通用 <n-input-number v-model:value="genTh" :step="0.05" :min="0" :max="1" size="small" style="width:96px" /><template v-if="localModel !== 'cl_tagger_v2'"> / {{ charLabel }} <n-input-number v-model:value="charTh" :step="0.05" :min="0" :max="1" size="small" style="width:96px" /></template></div>
         </div>
         <n-space vertical style="margin-top:8px">
           <n-upload :show-file-list="false" :max="1" accept="image/*" :custom-request="onUploadReq">

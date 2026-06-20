@@ -97,7 +97,8 @@ async function go() {
       </div>
       <n-space>
         <div>通用阈值 <n-slider v-model:value="genTh" :min="0" :max="1" :step="0.01" style="width:160px" /> {{ genTh }}</div>
-        <div>{{ charLabel }} <n-slider v-model:value="charTh" :min="0" :max="1" :step="0.01" style="width:160px" /> {{ charTh }}</div>
+        <!-- v2 单阈值不区分角色阈值：隐藏角色滑块（charTh 仍传 0.55，后端忽略） -->
+        <div v-if="tagger.state.selected !== 'cl_tagger_v2'">{{ charLabel }} <n-slider v-model:value="charTh" :min="0" :max="1" :step="0.01" style="width:160px" /> {{ charTh }}</div>
         <div>上传后自动反推 <n-switch v-model:value="autoTag" /></div>
       </n-space>
       <div style="margin-top:12px">
