@@ -26,6 +26,11 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
+# 日志以 UTF-8 输出（否则 Windows GBK 控制台会乱码、emoji 会崩 UnicodeEncodeError）
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+
 # ===== 配置 =====
 PY_VERSION = "3.10.11"
 EMBED_URL = f"https://www.python.org/ftp/python/{PY_VERSION}/python-{PY_VERSION}-embed-amd64.zip"
@@ -116,7 +121,21 @@ def _ignore_when_copy(directory: Path, names: list[str]) -> set[str]:
     return ignore
 
 
+def _warn_if_dist_stale() -> None:
+    """frontend/src 有比 dist 更新的文件时警告（提醒先 npm run build，否则整合包用旧前端）。"""
+    src = SRC_ROOT / "frontend" / "src"
+    dist = SRC_ROOT / "frontend" / "dist"
+    if not src.exists() or not (dist / "index.html").exists():
+        return  # 没法判断，交给后面的 dist 存在性检查
+    def newest(root: Path) -> float:
+        return max((f.stat().st_mtime for f in root.rglob("*") if f.is_file()), default=0.0)
+    if newest(src) > newest(dist) + 1.0:  # 1 秒容差，避免文件系统时间精度抖动
+        log("!!! 警告: frontend/src 有比 dist 更新的文件 —— 前端代码改过但没重新构建！")
+        log("    整合包将使用旧的前端 dist。请先执行: cd frontend && npm run build，再重跑本脚本。")
+
+
 def copy_source() -> None:
+    _warn_if_dist_stale()
     dest = PKG_ROOT / "wd14-tagger-web"
     if dest.exists():
         shutil.rmtree(dest)
