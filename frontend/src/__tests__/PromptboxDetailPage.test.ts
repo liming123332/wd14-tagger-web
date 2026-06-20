@@ -125,4 +125,18 @@ describe('PromptboxDetailPage', () => {
     expect(puts[0].get('files')).toBeTruthy()
     expect(tagged).toBe(false)
   })
+
+  it('加载 v2 收藏时阈值刷成 0.55（即便 meta 记的是旧值 0.35/0.9）', async () => {
+    const item_v2 = { ...ITEM, model: 'cl_tagger_v2', gen_threshold: 0.35, char_threshold: 0.9 }
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url === '/api/promptbox/c1') return { ok: true, json: async () => item_v2 } as any
+      return { ok: true, json: async () => ({}) } as any
+    }))
+    const w = mount(PromptboxDetailPage, { global: { stubs: { NImage: true, NUpload: true } } })
+    await flushPromises()
+    // NInputNumber 渲染为 input：v2 强制 0.55/0.55，meta 记的旧值不应出现
+    const vals = w.findAll('input').map(i => (i.element as HTMLInputElement).value)
+    expect(vals.filter(v => v === '0.55').length).toBeGreaterThanOrEqual(2)
+    expect(vals.filter(v => v === '0.35' || v === '0.9').length).toBe(0)
+  })
 })

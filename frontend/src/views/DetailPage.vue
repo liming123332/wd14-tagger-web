@@ -52,8 +52,16 @@ async function load() {
   const m = await getMeta(cur)
   if (cur !== id.value) return  // 已切到其它图，丢弃旧结果防竞态
   meta.value = m; dirty.value = false
-  genTh.value = m.tagger.gen_threshold
-  charTh.value = m.tagger.char_threshold
+  // v2 单阈值运营（文档推荐 0.55）：历史图可能记的是旧的 wd 默认值（如 0.35），
+  // 打开时强制刷成 0.55——仅改显示，meta 不落库；点「重新反推」才以 0.55 写回。
+  // 其它模型仍显示该图记录的阈值（与 watch 的 flag 跳过语义一致）。
+  if (m.model === 'cl_tagger_v2') {
+    genTh.value = 0.55
+    charTh.value = 0.55
+  } else {
+    genTh.value = m.tagger.gen_threshold
+    charTh.value = m.tagger.char_threshold
+  }
   modelChangeFromLoad = true
   localModel.value = m.model
 }

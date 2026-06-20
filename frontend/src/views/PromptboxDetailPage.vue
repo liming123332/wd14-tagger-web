@@ -82,8 +82,15 @@ function fromItem(it: PromptboxItem) {
   catsView.value = v
   extrasView.value = { tags: [...it.extras], phrase: it.extras.join(', '), user_edited: false }
   handEdited.value = new Set()
-  genTh.value = it.gen_threshold
-  charTh.value = it.char_threshold
+  // v2 单阈值运营（文档推荐 0.55）：历史项可能记的是旧 wd 默认值，打开时强制刷成 0.55
+  // ——仅改显示，item 不落库；点「重新反推」才以 0.55 写回。其它模型沿用记录值。
+  if (it.model === 'cl_tagger_v2') {
+    genTh.value = 0.55
+    charTh.value = 0.55
+  } else {
+    genTh.value = it.gen_threshold
+    charTh.value = it.char_threshold
+  }
   modelChangeFromLoad = true
   localModel.value = it.model
 }
