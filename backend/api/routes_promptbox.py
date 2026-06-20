@@ -87,7 +87,7 @@ def analyze(
         classified = classifier.classify(raw)
         categories = {k: list(classified[k].tags) for k in PROMPT_ORDER}
         extras = list(classified["extras"].tags)
-        # raw_prompt 含全部 6 类 + extras，供工作区卡片预览/复制（区别图库 build_prompt 不含 extras）
+        # raw_prompt 含全部 6 类 + extras，供工作区卡片预览/复制（现与图库 build_prompt 一致，均含 extras）
         all_tags = [t for k in PROMPT_ORDER for t in categories[k]] + extras
         items.append({
             "local_id": local_id, "original": orig, "thumb": thumb,

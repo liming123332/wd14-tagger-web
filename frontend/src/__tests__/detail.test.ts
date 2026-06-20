@@ -18,6 +18,13 @@ describe('buildPrompt', () => {
     } }
     expect(buildPrompt(meta)).toBe('long hair, dress, sitting')
   })
+  it('包含未归类 extras 的标签（拼在末尾）', () => {
+    const meta = { categories: {
+      quality: { tags: ['masterpiece'] }, head: { tags: ['long hair'] },
+      clothing: { tags: ['dress'] }, view: { tags: [] }, action: { tags: [] }, scene: { tags: [] },
+    }, extras: { tags: ['uncategorized', 'extra tag'] } }
+    expect(buildPrompt(meta)).toBe('masterpiece, long hair, dress, uncategorized, extra tag')
+  })
 })
 
 describe('parsePhrase', () => {

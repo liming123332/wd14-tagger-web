@@ -45,6 +45,9 @@ def build_prompt(meta: Meta) -> str:
         cat = meta.categories.get(k)
         if cat:
             out.extend(t for t in cat.tags if t)
+    # 未归类 extras 拼在末尾（与前端 detail-utils.ts buildPrompt 保持一致）：
+    # extras 与各分类同构，拖拽到各类为「复制」不移除，故其标签仍需进入完整 prompt。
+    out.extend(t for t in meta.extras.tags if t)
     return ", ".join(out)
 
 
