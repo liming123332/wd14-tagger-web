@@ -1,6 +1,12 @@
+import json
 from pathlib import Path
-from PIL import Image as PILImage
 
+import pytest
+from PIL import Image as PILImage
+from fastapi.testclient import TestClient
+
+from backend import deps
+from backend.main import create_app
 from backend.tasks.pathtag import expand_images, process_one
 
 
@@ -88,3 +94,62 @@ def test_process_one_bad_image_returns_error(tmp_path):
     status, evt = process_one(bad, FakeTagger({}), 0.55, 0.55, True, "overwrite")
     assert status == "error"
     assert evt["type"] == "error" and evt["current"] == "a.png"
+
+
+# ---- Task 3: 队列 + 路由 + SSE 全链路 ----
+
+def _app(tmp_path, monkeypatch):
+    monkeypatch.setattr("backend.config.settings.IMAGES_DIR", tmp_path / "imgs")
+    monkeypatch.setattr("backend.config.settings.MODELS_DIR", tmp_path / "models")
+    deps.get_storage.cache_clear()
+    deps.get_classifier.cache_clear()
+    return create_app()
+
+
+@pytest.fixture(autouse=True)
+def _reset_pathtag_queue():
+    # 每个测试重置队列单例，避免跨测试 state 残留
+    import backend.tasks.pathtag as m
+    m._pathtag_queue = None
+    yield
+
+
+def test_start_rejects_bad_path(tmp_path, monkeypatch):
+    with TestClient(_app(tmp_path, monkeypatch)) as client:
+        r = client.post("/api/pathtag/start",
+                        json={"path": str(tmp_path / "nope"), "model": "cl_tagger_v2"})
+        assert r.status_code == 400
+
+
+def test_start_rejects_unknown_model(tmp_path, monkeypatch):
+    with TestClient(_app(tmp_path, monkeypatch)) as client:
+        r = client.post("/api/pathtag/start", json={"path": str(tmp_path), "model": "nope"})
+        assert r.status_code == 400
+
+
+def test_start_returns_job_id_and_total(tmp_path, monkeypatch):
+    _make_img(tmp_path / "a.png")
+    _make_img(tmp_path / "b.png")
+    monkeypatch.setattr(deps, "get_tagger", lambda model="cl_tagger_v2": FakeTagger({"1girl": 0.9}))
+    with TestClient(_app(tmp_path, monkeypatch)) as client:
+        r = client.post("/api/pathtag/start", json={"path": str(tmp_path), "model": "cl_tagger_v2"})
+        assert r.status_code == 200
+        data = r.json()
+        assert data["total"] == 2 and "job_id" in data
+
+
+def test_full_run_writes_txt_and_streams_done(tmp_path, monkeypatch):
+    _make_img(tmp_path / "a.png")
+    monkeypatch.setattr(deps, "get_tagger", lambda model="cl_tagger_v2": FakeTagger({"1girl": 0.9, "solo": 0.5}))
+    with TestClient(_app(tmp_path, monkeypatch)) as client:
+        r = client.post("/api/pathtag/start", json={"path": str(tmp_path), "model": "cl_tagger_v2"})
+        job_id = r.json()["job_id"]
+        events = []
+        with client.stream("GET", f"/api/pathtag/{job_id}/events") as resp:
+            for line in resp.iter_lines():
+                if line.startswith("data: "):
+                    events.append(json.loads(line[len("data: "):]))
+                    if events[-1].get("type") == "done":
+                        break
+        assert any(e.get("type") == "done" for e in events)
+        assert (tmp_path / "a.txt").read_text(encoding="utf-8") == "1girl, solo"
