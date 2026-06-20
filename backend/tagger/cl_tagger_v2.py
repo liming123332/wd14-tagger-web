@@ -47,7 +47,7 @@ class CLTaggerV2:
 
     def _download(self) -> None:
         # 逻辑同 OnnxTagger/CLTagger（逐文件 skip 已有、.part 原子写、Content-Length 校验）。
-        # 注：cl_tagger_v2 是 gated 模型，hf-mirror 无法直接下载；用户需手动下载 3 文件放入 model_dir。
+        # 注：cl_tagger_v2 是 gated 模型，需登录同意条款后手动下载 3 文件放入 model_dir（程序无法自动下载 gated 模型）。
         self.model_dir.mkdir(parents=True, exist_ok=True)
         for name, url in self.spec.files.items():
             dst = self.model_dir / name

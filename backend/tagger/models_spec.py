@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 # 下载源移植自 tagger_prompt/scripts/tagger_prompt.py 的 _MODEL_DOWNLOADS。
-_HF = "https://hf-mirror.com"  # 国内镜像：所有模型走 hf-mirror（huggingface.co 的完整镜像）
+_HF = "https://huggingface.co"  # 源站：所有模型走 huggingface.co（hf-mirror 镜像对大文件会 302 重定向到境外 xet CDN 致 403，故改回源站）
 
 
 @dataclass(frozen=True)
