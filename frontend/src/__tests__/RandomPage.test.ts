@@ -17,9 +17,10 @@ vi.mock('../api/client', async () => {
   return {
     ...actual,
     randomImages: vi.fn(async () => {
-      // gallery item 也带 entry_key，避免切源瞬间（source 已变、items 尚未替换的那一帧）
-      // cardTo→parseEntryKey(undefined) 抛错。不影响 gallery 分支断言。
-      calls.push('randomImages'); return { items: [{ id: 'g1', source_name: 'g', tags: [], entry_key: 'gallery:g:g1' }] }
+      // 真实图库 item 结构（见 api/client.ts 的 randomImages）：{id, source_name, tags, ...}，
+      // 【没有 entry_key】。故意不伪造 entry_key——切源瞬间 source 已变、items 仍是图库 item
+      // 的那一帧，若代码未防御，cardTo→parseEntryKey(undefined) 会在“切源不崩”用例里暴露崩溃。
+      calls.push('randomImages'); return { items: [{ id: 'g1', source_name: 'g', tags: [] }] }
     }),
   }
 })
@@ -51,7 +52,7 @@ describe('RandomPage 源切换', () => {
     const selects = w.findAllComponents({ name: 'Select' })
     await selects[0].vm.$emit('update:value', 'characters')
     await flushPromises()
-    expect(calls.some(c => c === 'randomCf:characters:danbooru')).toBe(true)
+    expect(calls.some(c => c === 'randomCf:characters:anima')).toBe(true)
   })
 
   it('切到 artists 调 randomCf("artists", cfSource)', async () => {
@@ -60,18 +61,29 @@ describe('RandomPage 源切换', () => {
     const selects = w.findAllComponents({ name: 'Select' })
     await selects[0].vm.$emit('update:value', 'artists')
     await flushPromises()
-    expect(calls.some(c => c === 'randomCf:artists:danbooru')).toBe(true)
+    expect(calls.some(c => c === 'randomCf:artists:anima')).toBe(true)
   })
 
-  it('角色源下切 cfSource=anima 重抽 randomCf characters anima', async () => {
+  it('角色源下切 cfSource=danbooru 重抽 randomCf characters danbooru', async () => {
     const w = mount(RandomPage); await flushPromises()
-    // 切到 characters，cfSource 下拉才会渲染
+    // 切到 characters，cfSource 下拉才会渲染（默认 cfSource=anima）
     let selects = w.findAllComponents({ name: 'Select' })
     await selects[0].vm.$emit('update:value', 'characters'); await flushPromises()
     calls.length = 0
     // 切源后必须重新获取组件列表：v-if 渲染出的 cfSource 下拉不在旧数组里
     selects = w.findAllComponents({ name: 'Select' })
-    await selects[1].vm.$emit('update:value', 'anima')
+    await selects[1].vm.$emit('update:value', 'danbooru')
+    await flushPromises()
+    expect(calls.some(c => c === 'randomCf:characters:danbooru')).toBe(true)
+  })
+
+  it('图库非空时切到 characters 不崩（竞态：source 已变、旧 items 无 entry_key 的那一帧）', async () => {
+    const w = mount(RandomPage); await flushPromises()
+    // onMounted 后 items 是图库 item（无 entry_key）
+    const selects = w.findAllComponents({ name: 'Select' })
+    // 切源：source 同步变 characters，items 仍是图库 item 的那一帧，曾触发
+    // cardTo→parseEntryKey(undefined)→.split(':') 崩溃。修复后应平滑过渡、不抛。
+    await selects[0].vm.$emit('update:value', 'characters')
     await flushPromises()
     expect(calls.some(c => c === 'randomCf:characters:anima')).toBe(true)
   })

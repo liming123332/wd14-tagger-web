@@ -14,15 +14,15 @@ const total = ref(0)
 const page = ref(1)
 const size = 50
 const query = ref('')
-const source = ref('danbooru')
+const source = ref('anima')
 const series = ref<string | null>(null)
 const seriesOptions = ref<{ label: string; value: string }[]>([])
 const recentItems = ref<CfListItem[]>([])
 
 const SOURCE_OPTIONS = [
+  { label: 'Anima', value: 'anima' },
   { label: 'Danbooru', value: 'danbooru' },
   { label: 'e621', value: 'e621' },
-  { label: 'Anima', value: 'anima' },
 ]
 
 // Race-safety：递增的请求序号。慢请求返回时若序号已过期，丢弃其结果，

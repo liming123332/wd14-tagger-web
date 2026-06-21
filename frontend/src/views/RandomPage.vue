@@ -14,7 +14,7 @@ const size = 24
 const loading = ref(false)
 
 const source = ref<'gallery' | 'characters' | 'artists'>('gallery')
-const cfSource = ref<'danbooru' | 'anima'>('danbooru')
+const cfSource = ref<'danbooru' | 'anima'>('anima')
 
 const SOURCE_OPTIONS = [
   { label: '图库', value: 'gallery' },
@@ -22,8 +22,8 @@ const SOURCE_OPTIONS = [
   { label: '艺术家', value: 'artists' },
 ]
 const CF_SOURCE_OPTIONS = [
-  { label: 'Danbooru', value: 'danbooru' },
   { label: 'Anima', value: 'anima' },
+  { label: 'Danbooru', value: 'danbooru' },
 ]
 
 async function shuffle() {
@@ -41,11 +41,23 @@ async function shuffle() {
 }
 onMounted(shuffle)
 
-function onSource(v: 'gallery' | 'characters' | 'artists') { source.value = v; shuffle() }
-function onCfSource(v: 'danbooru' | 'anima') { cfSource.value = v; shuffle() }
+function onSource(v: 'gallery' | 'characters' | 'artists') {
+  source.value = v
+  // 立即清空旧 items：避免「source 已变、items 尚未异步替换」的中间帧拿旧数据
+  // （图库 item 无 entry_key）走 v-else 渲染 cardTo→parseEntryKey(undefined) 崩溃
+  items.value = []
+  shuffle()
+}
+function onCfSource(v: 'danbooru' | 'anima') {
+  cfSource.value = v
+  items.value = []
+  shuffle()
+}
 
 // cf 卡片映射（gallery 用 ImageCard 默认 props，不走这些函数）
 function cardTo(it: CfListItem): string {
+  // 防御：item 若是上一来源残留（图库 item 无 entry_key），不跳转，避免 parseEntryKey(undefined) 崩
+  if (!it.entry_key) return ''
   const { source: s, key } = parseEntryKey(it.entry_key)
   return source.value === 'artists' ? `/artists/${s}/${encodeURIComponent(key)}` : `/characters/${s}/${encodeURIComponent(key)}`
 }

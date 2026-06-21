@@ -43,11 +43,16 @@ def local_image_path(kind: str, source: str, key: str, which: str) -> Path | Non
             return paths.ARTIST_COVERS_DIR / _slug(url) if url else None
         if kind == "char" and source == "anima":
             row = get_anima_character_db().get_by_character(key)
-            name = (row or {}).get("thumbname" if which == "thumb" else "imgname")
+            # anima 离线包只携带 webp 缩略图（thumbname）；png 原图（imgname）几乎未带
+            # （animadex-data：artists/images 0 张、characters/images 仅 1823/36483）。
+            # 且前端 which 命名不统一（char=thumb/image、artist=1/2），旧逻辑只认
+            # which=="thumb" → artist 的 1/2 总走 imgname → 本地 png 不存在 → 回退 CDN →
+            # 离线全部裂图。统一用 thumbname 命中本地 webp，which 不再区分。
+            name = (row or {}).get("thumbname")
             return paths.ANIMA_DIR / "characters" / name if name else None
         if kind == "artist" and source == "anima":
             row = get_anima_artist_db().get_by_artist(key)
-            name = (row or {}).get("thumbname" if which == "thumb" else "imgname")
+            name = (row or {}).get("thumbname")
             return paths.ANIMA_DIR / "artists" / name if name else None
     except Exception:
         return None

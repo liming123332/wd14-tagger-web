@@ -22,7 +22,7 @@ describe('CharactersPage', () => {
     expect(labels).toContain('搜索')
   })
 
-  it('加载角色列表并请求 /api/cf/characters?source=danbooru，渲染卡片名称', async () => {
+  it('加载角色列表并请求 /api/cf/characters?source=anima，渲染卡片名称', async () => {
     const urls: string[] = []
     vi.stubGlobal('fetch', vi.fn(async (url: string) => {
       urls.push(url)
@@ -31,7 +31,7 @@ describe('CharactersPage', () => {
     }))
     const w = mount(CharactersPage, { global: { stubs: { NImage: true } } })
     await flushPromises()
-    expect(urls.some(u => u.includes('/api/cf/characters?') && u.includes('source=danbooru'))).toBe(true)
+    expect(urls.some(u => u.includes('/api/cf/characters?') && u.includes('source=anima'))).toBe(true)
     expect(w.text()).toContain('miku')
   })
 
@@ -45,9 +45,9 @@ describe('CharactersPage', () => {
     const w = mount(CharactersPage, { global: { stubs: { NImage: true } } })
     await flushPromises()
     urls.length = 0
-    ;(w.vm as any).onSource('anima')
+    ;(w.vm as any).onSource('danbooru')
     await flushPromises()
-    expect(urls.some(u => u.includes('source=anima'))).toBe(true)
+    expect(urls.some(u => u.includes('source=danbooru'))).toBe(true)
   })
 })
 

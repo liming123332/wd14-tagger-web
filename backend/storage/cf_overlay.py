@@ -22,7 +22,10 @@ class CfOverlayStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.overlay_dir = Path(overlay_dir)
         self.overlay_dir.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.Lock()
+        # RLock（可重入）：upsert 持锁时会调用 self.get() 读 existing.created_at，
+        # get 内部也获取同一把锁——普通 Lock 不可重入会在此死锁。RLock 允许同线程
+        # 多次 acquire，跨线程仍互斥，既保证并发安全又不破坏 upsert→get 的嵌套调用。
+        self._lock = threading.RLock()
         self._conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(
@@ -64,7 +67,12 @@ class CfOverlayStore:
         )
 
     def get(self, entry_key: str) -> CfOverlay | None:
-        r = self._conn.execute("SELECT * FROM overlay WHERE entry_key=?", (entry_key,)).fetchone()
+        # check_same_thread=False 允许跨线程共享连接，但 sqlite 连接在 C 层非线程安全：
+        # get_asset 是 FastAPI sync 端点（run_in_threadpool），列表页几十张卡片并发查 overlay
+        # 时不加锁会触发 InterfaceError: bad parameter or other API misuse。execute/fetchone
+        # 必须在锁内；_row_to 只读已 fetch 的 Row 字段、不碰连接，放锁外缩短临界区。
+        with self._lock:
+            r = self._conn.execute("SELECT * FROM overlay WHERE entry_key=?", (entry_key,)).fetchone()
         return self._row_to(r) if r else None
 
     def upsert(self, ov: CfOverlay) -> CfOverlay:

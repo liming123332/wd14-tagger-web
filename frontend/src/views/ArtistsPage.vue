@@ -6,10 +6,10 @@ import { searchArtists, toggleArtistFavorite, listCfRecent, parseEntryKey } from
 
 const msg = useMessage()
 const SOURCE_OPTIONS = [
-  { label: 'Danbooru 画师', value: 'danbooru' },
   { label: 'Anima 画师', value: 'anima' },
+  { label: 'Danbooru 画师', value: 'danbooru' },
 ]
-const source = ref('danbooru')
+const source = ref('anima')
 const query = ref('')
 const page = ref(1); const size = ref(50)
 const total = ref(0); const items = ref<any[]>([])
