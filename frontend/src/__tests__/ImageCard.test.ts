@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 
-vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
+const push = vi.fn()
+vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
 vi.mock('naive-ui', () => ({
   useMessage: () => ({ success: vi.fn(), warning: vi.fn(), error: vi.fn() }),
   NCard: { template: `<div class="n-card"><slot/></div>` },
@@ -19,7 +20,7 @@ import ImageCard from '../components/ImageCard.vue'
 const ITEM = { id: 'x', source_name: 'a.png', thumb: 't.webp', original: 'original.png', prompt: 'long hair' }
 
 describe('ImageCard', () => {
-  beforeEach(() => { vi.unstubAllGlobals() })
+  beforeEach(() => { vi.unstubAllGlobals(); push.mockClear() })
 
   it('渲染复制与下载两个按钮', () => {
     const w = mount(ImageCard, { props: { item: ITEM } })
@@ -55,5 +56,38 @@ describe('ImageCard', () => {
   it('无 tags 时不渲染标签行', () => {
     const w = mount(ImageCard, { props: { item: ITEM } })
     expect(w.findAll('.n-tag').length).toBe(0)
+  })
+})
+
+describe('ImageCard 通用化', () => {
+  beforeEach(() => { vi.unstubAllGlobals(); push.mockClear() })
+
+  it('传 to 时点击跳转到 to（而非默认 /detail/{id}）', async () => {
+    const w = mount(ImageCard, { props: { item: { id: 'x' }, to: '/characters/danbooru/1' } })
+    await w.find('.thumb').trigger('click')
+    expect(push).toHaveBeenCalledWith('/characters/danbooru/1')
+  })
+  it('不传 to 时回退到 /detail/{id}', async () => {
+    const w = mount(ImageCard, { props: { item: { id: 'abc' } } })
+    await w.find('.thumb').trigger('click')
+    expect(push).toHaveBeenCalledWith('/detail/abc')
+  })
+  it('传 imgSrc/titleText/tagsList 时覆盖默认字段', () => {
+    const w = mount(ImageCard, {
+      props: { item: {}, imgSrc: '/img/a.jpg', titleText: '初音', tagsList: ['1girl', 'singer', 'blue'] },
+    })
+    expect(w.find('.name').text()).toBe('初音')
+    expect(w.findAll('.n-tag').map(t => t.text())).toEqual(['1girl', 'singer', 'blue'])
+  })
+  it('不传 favorite 时不渲染收藏按钮', () => {
+    const w = mount(ImageCard, { props: { item: { id: 'x' } } })
+    expect(w.findAll('button').some(b => b.attributes('title') === '收藏')).toBe(false)
+  })
+  it('传 favorite 时渲染收藏按钮，点击 emit toggle-favorite', async () => {
+    const w = mount(ImageCard, { props: { item: { id: 'x' }, favorite: true } })
+    const fav = w.findAll('button').find(b => b.attributes('title') === '收藏')!
+    expect(fav).toBeTruthy()
+    await fav.trigger('click')
+    expect(w.emitted('toggle-favorite')).toBeTruthy()
   })
 })

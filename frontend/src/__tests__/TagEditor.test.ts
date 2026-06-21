@@ -53,3 +53,38 @@ describe('TagEditor', () => {
     expect(writeText).toHaveBeenCalledWith('long hair, nice')
   })
 })
+
+describe('TagEditor lockedTags', () => {
+  beforeEach(() => vi.unstubAllGlobals())
+
+  it('传 lockedTags 时渲染只读锁定标签（带 locked-tag 类，不可关闭）', () => {
+    const w = mount(TagEditor, {
+      props: {
+        title: '角色头部', color: '#4CAF50',
+        modelValue: MODEL(['long hair']), mode: 'tags', categoryKey: 'head',
+        lockedTags: ['miku', 'vocaloid'],
+      },
+    })
+    const locked = w.findAll('.locked-tag')
+    expect(locked.length).toBe(2)
+    expect(locked.map(t => t.text())).toEqual(['🔒 miku', '🔒 vocaloid'])
+  })
+  it('不传 lockedTags 时不渲染锁定标签', () => {
+    const w = mount(TagEditor, {
+      props: { title: '角色头部', color: '#4CAF50', modelValue: MODEL(['long hair']), mode: 'tags', categoryKey: 'head' },
+    })
+    expect(w.findAll('.locked-tag').length).toBe(0)
+  })
+  it('锁定标签不进入可编辑 tags（增删/拖拽不影响锁区）', () => {
+    const w = mount(TagEditor, {
+      props: {
+        title: '角色头部', color: '#4CAF50',
+        modelValue: MODEL(['long hair']), mode: 'tags', categoryKey: 'head',
+        lockedTags: ['miku'],
+      },
+    })
+    // 可编辑区 n-tag 不含 miku（锁区单独渲染）
+    const editable = w.findAll('.n-tag').filter(t => !t.classes().includes('locked-tag'))
+    expect(editable.map(t => t.text())).toEqual(['long hair'])
+  })
+})
