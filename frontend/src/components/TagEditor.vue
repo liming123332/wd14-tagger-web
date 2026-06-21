@@ -8,6 +8,7 @@ const props = defineProps<{
   modelValue: { tags: string[]; phrase: string; user_edited: boolean }
   mode: 'tags' | 'phrase'
   categoryKey?: string
+  lockedTags?: string[]
 }>()
 const emit = defineEmits<{
   (e: 'update:modelValue', v: any): void
@@ -54,6 +55,12 @@ async function copyPhrase() {
        @dragleave.prevent="dragging = false" @drop.prevent="onDrop">
     <div class="cat-title" :style="{ background: color }">{{ title }}</div>
     <div class="cat-body">
+      <!-- 🔒 锁定标签：来自权威数据（角色 trigger+core_tags / 画师 tag），只读不可增删/拖拽 -->
+      <div v-if="lockedTags && lockedTags.length && mode === 'tags'" class="locked-tags">
+        <n-tag v-for="t in lockedTags" :key="'lock-' + t" class="locked-tag" size="small" round :bordered="false" type="warning">
+          🔒 {{ t }}
+        </n-tag>
+      </div>
       <template v-if="mode === 'tags'">
         <n-space size="small">
           <n-tag v-for="(t, i) in modelValue.tags" :key="t + i" closable @dragstart="($event as any).dataTransfer.setData('text/tag', t)"
@@ -88,4 +95,5 @@ async function copyPhrase() {
 .cat-body { padding: 8px 10px; position: relative; }
 .phrase-box { width: 100%; resize: vertical; font-family: inherit; background: var(--cat-input-bg, #fff); color: var(--cat-input-color, inherit); }
 .drop-hint { position: absolute; inset: 0; background: rgba(0,128,0,.12); display:flex;align-items:center;justify-content:center; }
+.locked-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px }
 </style>
