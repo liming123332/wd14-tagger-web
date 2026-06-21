@@ -244,3 +244,111 @@ def test_prompt_substring_skips_full_scan(tmp_path, monkeypatch):
     res = s.list_images(prompt=["tag"], size=5)  # "tag" 子串命中全部 20 张
     assert res["total"] == 20
     assert calls["n"] == 5  # 过滤走词表不读盘，只读切片 5 张
+
+
+# -- 阶段 D：增量一致性 -------------------------------------------------
+def test_index_lazy_build_picks_up_direct_writes(tmp_path):
+    # _write_meta_directly 绕过 save_*，数据靠首次 query 的全量 rebuild 进入索引
+    s = Storage(tmp_path)
+    _write_meta_directly(tmp_path, "20260619-100000-0001", tags=["long hair"])
+    assert s.list_images(prompt=["long hair"])["total"] == 1
+
+
+def test_save_upload_visible_without_rebuild(tmp_path):
+    # 索引建好后 save_upload（经 save_meta hook）增量可见，无需 rebuild
+    s = Storage(tmp_path)
+    _write_meta_directly(tmp_path, "20260619-100000-0001", tags=["cat"])
+    s.list_images()  # 触发构建，_index 非 None
+    src = tmp_path / "in.png"
+    _img(src)
+    mid = s.save_upload(Image.open(src), "in.png")
+    r = s.list_images()
+    assert r["total"] == 2
+    assert mid in [it["id"] for it in r["items"]]
+
+
+def test_delete_updates_index(tmp_path):
+    s = Storage(tmp_path)
+    _write_meta_directly(tmp_path, "20260619-100000-0001", tags=["long hair"])
+    _write_meta_directly(tmp_path, "20260619-100000-0002", tags=["long hair"])
+    s.list_images()  # 构建
+    s.delete("20260619-100000-0001")
+    r = s.list_images(prompt=["long hair"])
+    assert r["total"] == 1
+    assert r["items"][0]["id"] == "20260619-100000-0002"
+
+
+def test_save_meta_updates_cat_index(tmp_path):
+    from backend.models import CategoryData
+    s = Storage(tmp_path)
+    _write_meta_directly(tmp_path, "20260619-100000-0001", tags=["long hair"])
+    s.list_images()  # 构建
+    m = s.get_meta("20260619-100000-0001")
+    m.categories["head"] = CategoryData(tags=["short hair"])
+    s.save_meta("20260619-100000-0001", m)
+    assert s.list_images(prompt=["long hair"])["total"] == 0  # 旧标签不再命中
+    assert s.list_images(prompt=["short hair"])["total"] == 1  # 新标签命中
+
+
+def test_save_meta_updates_user_index(tmp_path):
+    s = Storage(tmp_path)
+    _write_meta_directly(tmp_path, "20260619-100000-0001", user_tags=["fav"])
+    s.list_images()  # 构建
+    m = s.get_meta("20260619-100000-0001")
+    m.tags = ["done"]
+    s.save_meta("20260619-100000-0001", m)
+    assert s.list_images(tags=["fav"])["total"] == 0
+    assert s.list_images(tags=["done"])["total"] == 1
+    assert s.all_tags() == {"done": 1}
+
+
+def test_incremental_matches_rebuild(tmp_path):
+    # 交错 add/update/delete 后，增量索引查询结果必须 == force rebuild 从盘重建
+    from backend.models import CategoryData
+    s = Storage(tmp_path)
+    _write_meta_directly(tmp_path, "20260619-100000-0001", tags=["a"], user_tags=["x"])
+    _write_meta_directly(tmp_path, "20260619-100000-0002", tags=["b"], user_tags=["y"])
+    s.list_images()  # 构建
+
+    src = tmp_path / "in.png"
+    _img(src)
+    new_mid = s.save_upload(Image.open(src), "in.png")  # add
+    s.delete("20260619-100000-0001")  # remove
+    m = s.get_meta("20260619-100000-0002")
+    m.categories["head"] = CategoryData(tags=["c"])  # 覆盖原 ["b"]
+    m.tags = ["z"]
+    s.save_meta("20260619-100000-0002", m)  # update
+
+    def snapshot():
+        full = s.list_images(size=100)
+        return {
+            "total": full["total"],
+            "ids": sorted(it["id"] for it in full["items"]),
+            "prompt_a": s.list_images(prompt=["a"])["total"],
+            "prompt_b": s.list_images(prompt=["b"])["total"],
+            "prompt_c": s.list_images(prompt=["c"])["total"],
+            "tag_x": s.list_images(tags=["x"])["total"],
+            "tag_z": s.list_images(tags=["z"])["total"],
+            "all_tags": s.all_tags(),
+        }
+
+    before = snapshot()
+    s.rebuild_index(force=True)  # 从盘重建
+    after = snapshot()
+    assert before == after
+    # 形态自检：update 生效、delete 生效
+    assert before["prompt_c"] == 1 and before["prompt_b"] == 0
+    assert before["tag_x"] == 0 and before["tag_z"] == 1
+    assert before["total"] == 2
+
+
+def test_rebuild_force_heals_dirty(tmp_path):
+    # 外部直接落盘（不经 hook）后，增量索引不感知；force rebuild 自愈
+    s = Storage(tmp_path)
+    _write_meta_directly(tmp_path, "20260619-100000-0001", tags=["a"])
+    s.list_images()  # 构建
+    assert s.list_images(prompt=["a"])["total"] == 1
+    _write_meta_directly(tmp_path, "20260619-100000-0002", tags=["a"])  # 绕过 hook
+    assert s.list_images(prompt=["a"])["total"] == 1  # 增量未感知
+    s.rebuild_index(force=True)
+    assert s.list_images(prompt=["a"])["total"] == 2  # 自愈
