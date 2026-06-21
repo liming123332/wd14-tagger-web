@@ -128,6 +128,55 @@ def test_tag_writes_overlay(tmp_path, monkeypatch):
     assert "weird thing" in d["extras"]["tags"]
     # 权威 trigger 仍在锁定标签
     assert "miku" in d["locked_tags"]
+    # 反向锁定：overlay 的分类标签不渗入 locked_tags
+    assert "long hair" not in d["locked_tags"]
+
+
+def test_reclassify_keeps_user_edited(tmp_path, monkeypatch):
+    # reclassify 的 existing=keep 保留语义：keep 转成 CategoryData(user_edited=True)，
+    # classify 会原样保留这些类，其余按 raw_tags 重算。
+    client = TestClient(_tag_app(tmp_path, monkeypatch))
+    (tmp_path / "cf" / "covers").mkdir()
+    (tmp_path / "cf" / "covers" / "miku.jpg").write_bytes(_png().read())
+    # 1) 先 tag 产生 raw_tags（_FakeTagger 把 head 算成 "long hair"）
+    r = client.post("/api/cf/character/tag", params={"source": "danbooru", "key": "1"},
+                    json={"model": "wd14", "gen_th": 0.35, "char_th": 0.9, "use_char": True})
+    assert r.status_code == 200
+    tagged = r.json()
+    assert tagged["categories"]["head"]["tags"] == ["long hair"]  # baseline：当前 head 来自 raw
+    # 2) reclassify 带 keep={"head": ["my_custom_head"]}：head 标记 user_edited=True，
+    #    classify 原样保留，不被 raw_tags 的 "long hair" 覆盖
+    r2 = client.post("/api/cf/character/reclassify", params={"source": "danbooru", "key": "1"},
+                     json={"keep": {"head": ["my_custom_head"]}})
+    assert r2.status_code == 200
+    d = r2.json()
+    assert d["categories"]["head"]["tags"] == ["my_custom_head"]  # user_edited 类被保留
+    assert d["categories"]["head"]["user_edited"] is True
+    # 未 keep 的类仍按 raw_tags 重算（clothing 应仍含 dress）
+    assert "dress" in d["categories"]["clothing"]["tags"]
+    assert "weird thing" in d["extras"]["tags"]
+    # 锁定标签不受 reclassify 影响
+    assert "miku" in d["locked_tags"]
+
+
+def test_image_upload_overrides_path(tmp_path, monkeypatch):
+    # image 上传 → overlay 联动：文件写到 overlay 目录，image_override 持久化。
+    client = TestClient(_app(tmp_path, monkeypatch))
+    r = client.post("/api/cf/character/image", params={"source": "danbooru", "key": "1"},
+                    files={"file": ("miku2.png", _png(), "image/png")})
+    assert r.status_code == 200
+    name = r.json()["image_override"]
+    assert isinstance(name, str) and name  # 非空
+    assert name.endswith(".png")
+    # 详情里 image_override 持久化
+    again = client.get("/api/cf/character", params={"source": "danbooru", "key": "1"}).json()
+    assert again["image_override"] == name
+    # 文件确实落到 overlay 目录（entry_key="char:danbooru:1" → _safe_name "char_danbooru_1"）
+    from backend.characterfinder.paths import entry_key
+    from backend.storage.cf_overlay import _safe_name
+    safe = _safe_name(entry_key("char", "danbooru", "1"))
+    written = tmp_path / "cf" / "overlay" / safe / name
+    assert written.exists() and written.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
 
 
 def test_save_persists_categories(tmp_path, monkeypatch):
