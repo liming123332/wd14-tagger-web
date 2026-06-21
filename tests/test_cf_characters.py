@@ -317,3 +317,75 @@ def test_anima_character_detail_404_on_missing_key(tmp_path, monkeypatch):
     client = TestClient(app)
     r = client.get("/api/cf/character", params={"source": "anima", "key": "nonexistent"})
     assert r.status_code == 404
+
+
+# ============================================================================
+# 主题 3 M11：favorites/recent 的 _resolve_item 反查（char-danbooru + artist-anima 两组合）。
+# _resolve_item 走 entry_key 解析 → 反查权威 db → 复用 _danbooru_item / _anima_artist。
+# ============================================================================
+
+_ANIMA_ARTIST_DDL = """
+CREATE TABLE artists (
+    artist TEXT, name TEXT, name_lower TEXT, trigger TEXT, count INTEGER,
+    url TEXT, imgname TEXT, thumbname TEXT, score REAL, search_blob TEXT,
+    image_version INTEGER
+);
+"""
+
+
+def _resolve_app(tmp_path, monkeypatch):
+    """char danbooru（miku id=1）+ artist anima（ciloranko）双 db 配置。"""
+    app = _app(tmp_path, monkeypatch)
+    # artist anima db
+    anima_artists_db = tmp_path / "cf/anima_artists.db"
+    monkeypatch.setattr("backend.characterfinder.paths.ANIMA_ARTISTS_DB", anima_artists_db)
+    c = sqlite3.connect(anima_artists_db)
+    c.executescript(_ANIMA_ARTIST_DDL)
+    c.execute(
+        "INSERT INTO artists(artist,name,name_lower,trigger,count,url,thumbname,imgname,search_blob) VALUES(?,?,?,?,?,?,?,?,?)",
+        ("ciloranko", "Ciloranko", "ciloranko", "ciloranko", 500,
+         "https://example.com/c", "ciloranko.webp", "ciloranko.png", "ciloranko"),
+    )
+    c.commit(); c.close()
+    # _app 已 cache_clear char 工厂，这里补 anima artist 工厂
+    deps.get_anima_artist_db.cache_clear()
+    return app
+
+
+def test_favorites_resolve_char_danbooru_and_artist_anima(tmp_path, monkeypatch):
+    # _resolve_item 的 char-danbooru + artist-anima 两组合：
+    # 收藏一个 char（danbooru miku）和一个 artist（anima ciloranko），断言两 kind 各自返回对应 item。
+    client = TestClient(_resolve_app(tmp_path, monkeypatch))
+    # 收藏 char danbooru
+    client.post("/api/cf/character/favorite", params={"source": "danbooru", "key": "1"})
+    # 收藏 artist anima
+    client.post("/api/cf/artist/favorite", params={"source": "anima", "key": "ciloranko"})
+    # favorites?kind=char 返回 miku item（entry_key 前缀 char:）
+    rc = client.get("/api/cf/favorites", params={"kind": "char"})
+    assert rc.status_code == 200
+    char_items = rc.json()["items"]
+    assert len(char_items) == 1
+    assert char_items[0]["entry_key"] == "char:danbooru:1"
+    assert char_items[0]["name"] == "miku"
+    assert char_items[0]["favorite"] is True
+    # favorites?kind=artist 返回 ciloranko item（entry_key 前缀 artist:）
+    ra = client.get("/api/cf/favorites", params={"kind": "artist"})
+    assert ra.status_code == 200
+    artist_items = ra.json()["items"]
+    assert len(artist_items) == 1
+    assert artist_items[0]["entry_key"] == "artist:anima:ciloranko"
+    assert artist_items[0]["name"] == "Ciloranko"
+    assert artist_items[0]["favorite"] is True
+
+
+def test_recent_resolve_char_danbooru(tmp_path, monkeypatch):
+    # _resolve_item 经 recent 反查 char-danbooru：查看详情后 recent 含该 char item。
+    client = TestClient(_resolve_app(tmp_path, monkeypatch))
+    # 查看详情触发 recent.add
+    client.get("/api/cf/character", params={"source": "danbooru", "key": "1"})
+    rr = client.get("/api/cf/recent", params={"kind": "char"})
+    assert rr.status_code == 200
+    items = rr.json()["items"]
+    assert len(items) == 1
+    assert items[0]["entry_key"] == "char:danbooru:1"
+    assert items[0]["name"] == "miku"

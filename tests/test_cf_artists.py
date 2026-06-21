@@ -96,3 +96,76 @@ def test_artist_image_upload_validates_size_and_magic(tmp_path, monkeypatch):
                         files={"file": ("fake.png", io.BytesIO(b"not an image"), "image/png")})
     assert r_bad.status_code == 400
 
+
+# ============================================================================
+# 主题 3 M10：艺术家 5 联动 smoke（tag/reclassify/save/image/favorite）。
+# 复用 danbooru artist fixture（_app 已建 artists.db 含 ebifurya id=1），
+# 本地 cover 放 ARTIST_COVERS_DIR（paths.ARTIST_COVERS_DIR 在 _app 中未 patch，
+# 这里补 monkeypatch），_FakeTagger monkeypatch routes_artists.get_tagger。
+# ============================================================================
+
+
+class _FakeTagger:
+    def tag_image(self, pil, gen_th=0.35, char_th=0.9, use_char=True):
+        return {"long hair": 0.9, "dress": 0.7, "weird thing": 0.4}
+
+
+def _artist_overlay_app(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch)
+    monkeypatch.setattr("backend.characterfinder.paths.ARTIST_COVERS_DIR", tmp_path / "cf" / "artist_covers")
+    monkeypatch.setattr("backend.api.routes_artists.get_tagger", lambda model="wd14": _FakeTagger())
+    return app
+
+
+def test_artist_tag_writes_overlay(tmp_path, monkeypatch):
+    # tag：本地 cover → 反推 → overlay categories + 权威 tag 仍锁定。
+    client = TestClient(_artist_overlay_app(tmp_path, monkeypatch))
+    (tmp_path / "cf" / "artist_covers").mkdir()
+    # local_image_path 用 row.image_url_1 的 slug（_slug 取 Path(url).name = "1.jpg"）
+    (tmp_path / "cf" / "artist_covers" / "1.jpg").write_bytes(_png_bytes())
+    r = client.post("/api/cf/artist/tag", params={"source": "danbooru", "key": "1"},
+                    json={"model": "wd14", "gen_th": 0.35, "char_th": 0.9, "use_char": True})
+    assert r.status_code == 200
+    d = r.json()
+    assert "long hair" in d["categories"]["head"]["tags"]
+    assert "dress" in d["categories"]["clothing"]["tags"]
+    # 画师 tag 仍在 locked_tags
+    assert "ebifurya" in d["locked_tags"]
+    # 反向锁定：overlay 分类不渗入 locked_tags
+    assert "long hair" not in d["locked_tags"]
+
+
+def test_artist_save_and_favorite(tmp_path, monkeypatch):
+    # save + favorite：overlay 持久化 + 收藏 toggle。
+    client = TestClient(_artist_overlay_app(tmp_path, monkeypatch))
+    r = client.put("/api/cf/artist", params={"source": "danbooru", "key": "1"},
+                   json={"categories": {"head": {"tags": ["x"], "phrase": "", "user_edited": True}},
+                         "extras": {"tags": [], "phrase": "", "user_edited": False}, "custom_tags": ["y"]})
+    assert r.status_code == 200
+    again = client.get("/api/cf/artist", params={"source": "danbooru", "key": "1"}).json()
+    assert again["categories"]["head"]["tags"] == ["x"]
+    assert again["custom_tags"] == ["y"]
+    # favorite toggle
+    rf = client.post("/api/cf/artist/favorite", params={"source": "danbooru", "key": "1"})
+    assert rf.json()["favorite"] is True
+
+
+def test_artist_reclassify_and_image(tmp_path, monkeypatch):
+    # reclassify + image：existing 保留 + 上传替换图。
+    client = TestClient(_artist_overlay_app(tmp_path, monkeypatch))
+    (tmp_path / "cf" / "artist_covers").mkdir()
+    (tmp_path / "cf" / "artist_covers" / "1.jpg").write_bytes(_png_bytes())
+    # 先 tag 产生 raw_tags
+    client.post("/api/cf/artist/tag", params={"source": "danbooru", "key": "1"},
+                json={"model": "wd14", "gen_th": 0.35, "char_th": 0.9, "use_char": True})
+    # reclassify keep head
+    r = client.post("/api/cf/artist/reclassify", params={"source": "danbooru", "key": "1"},
+                    json={"keep": {"head": ["custom"]}})
+    assert r.status_code == 200
+    assert r.json()["categories"]["head"]["tags"] == ["custom"]
+    # image 上传
+    ri = client.post("/api/cf/artist/image", params={"source": "danbooru", "key": "1"},
+                     files={"file": ("a.png", io.BytesIO(_png_bytes()), "image/png")})
+    assert ri.status_code == 200
+    assert ri.json()["image_override"].endswith(".png")
+
