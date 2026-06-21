@@ -57,6 +57,10 @@ def create_app() -> FastAPI:
     app.include_router(routes_cfassets.router)
     from backend.api import routes_characters
     app.include_router(routes_characters.router)
+    # 裁决 A（Task 11）：cfassets/characters 已在上方注册（Task 8/9），此处只新增
+    # routes_artists。不重复 include 同一 router，避免路由重复注册。
+    from backend.api import routes_artists
+    app.include_router(routes_artists.router)
     # 生产：托管前端构建产物（mount "/" 必须在所有 /api 路由 include 之后，避免拦截 API）
     dist = settings.ROOT / "frontend" / "dist"
     if dist.exists():

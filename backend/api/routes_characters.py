@@ -15,14 +15,20 @@ from pydantic import BaseModel
 from PIL import Image, UnidentifiedImageError
 import secrets
 
+# 裁决 C（Task 11）：将 favorites/recent/random 追加端点需要的依赖合并进此顶部
+# import 块（避免 brief 写的中部重复 import 块）。原 Task 9/10 已含 char 侧依赖，
+# Task 11 追加 artist 侧：get_cf_artist_favorites / get_artist_db / get_anima_artist_db。
 from backend.deps import (
     get_character_db,
     get_anima_character_db,
     get_cf_overlay,
     get_cf_favorites,
+    get_cf_artist_favorites,
     get_cf_recent,
     get_tagger,
     get_classifier,
+    get_artist_db,
+    get_anima_artist_db,
 )
 from backend.models import CfOverlay, CategoryData
 from backend.characterfinder import paths
@@ -224,3 +230,75 @@ def upload_character_image(source: str, key: str, file: UploadFile = File(...)):
 def toggle_favorite(source: str, key: str):
     ek = paths.entry_key("char", source, key)
     return {"favorite": get_cf_favorites().toggle(ek)}
+
+
+# ============================================================================
+# Task 11：共享 /api/cf 前缀的收藏/最近/随机端点（char + artist 统一入口）。
+# 追加到 routes_characters.py 末尾，而非 routes_artists.py，避免与 artist 路由
+# 同前缀注册冲突；deps import 已合并进顶部（裁决 C）。
+# ============================================================================
+
+
+def _resolve_item(entry_key: str) -> dict | None:
+    """从 entry_key 反查权威 db 取回基础信息（带 favorite=True）。找不到返回 None。"""
+    try:
+        k, src, key = paths.parse_entry_key(entry_key)
+    except ValueError:
+        return None
+    if k == "char":
+        row = (get_anima_character_db().get_by_character(key) if src == "anima"
+               else get_character_db().get_by_id(int(key)))
+        if not row:
+            return None
+        return _anima_item(row, True) if src == "anima" else _danbooru_item(row, True)
+    # artist：lazy import 规避模块顶层循环导入
+    from backend.api.routes_artists import _anima_artist, _danbooru_artist
+    row = (get_anima_artist_db().get_by_artist(key) if src == "anima"
+           else get_artist_db().get_by_id(int(key)))
+    if not row:
+        return None
+    return _anima_artist(row, True) if src == "anima" else _danbooru_artist(row, True)
+
+
+def _resolve_items(keys: list[str]) -> list[dict]:
+    out = []
+    for ek in keys:
+        item = _resolve_item(ek)
+        if item is not None:
+            out.append(item)
+    return out
+
+
+# 裁决 D（Task 11）：brief 原文用 Query(regex=...)，FastAPI/pydantic v2 中 regex=
+# 已 deprecated，改用 pattern=。
+@router.get("/favorites")
+def list_favorites(kind: str = Query("char", pattern="^(char|artist)$")):
+    store = get_cf_favorites() if kind == "char" else get_cf_artist_favorites()
+    keys = [ek for ek in store.get_all() if ek.startswith(f"{kind}:")]
+    return {"items": _resolve_items(keys)}
+
+
+@router.get("/recent")
+def list_recent(kind: str = Query("char", pattern="^(char|artist)$"),
+                limit: int = Query(50, le=200)):
+    keys = [ek for ek in get_cf_recent().get_all() if ek.startswith(f"{kind}:")]
+    return {"items": _resolve_items(keys[:limit])}
+
+
+@router.get("/random")
+def random_cf(type: str = Query("characters"), source: str = Query("danbooru"),
+              size: int = Query(24, ge=1, le=200)):
+    if type == "artists":
+        db = get_anima_artist_db() if source == "anima" else get_artist_db()
+        rows, _ = db.search("", limit=size, offset=0)
+        favs = set(get_cf_artist_favorites().get_all())
+        from backend.api.routes_artists import _anima_artist, _danbooru_artist
+        items = [_anima_artist(r, paths.entry_key("artist", source, r["artist"]) in favs) if source == "anima"
+                 else _danbooru_artist(r, paths.entry_key("artist", "danbooru", str(r["id"])) in favs) for r in rows]
+    else:
+        db = get_anima_character_db() if source == "anima" else get_character_db()
+        rows, _ = db.search("", limit=size, offset=0)
+        favs = set(get_cf_favorites().get_all())
+        items = [_anima_item(r, paths.entry_key("char", source, r["character"]) in favs) if source == "anima"
+                 else _danbooru_item(r, paths.entry_key("char", "danbooru", str(r["id"])) in favs) for r in rows]
+    return {"items": items}
