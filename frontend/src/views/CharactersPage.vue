@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { NCard, NGrid, NGridItem, NPagination, NEmpty, NSelect, NInput } from 'naive-ui'
+import { NCard, NGrid, NGridItem, NPagination, NEmpty, NSelect, NInput, useMessage } from 'naive-ui'
 import {
   searchCharacters, listCharacterSeries, toggleCharacterFavorite, parseEntryKey,
   type CfListItem,
 } from '../api/characterfinder'
 import ImageCard from '../components/ImageCard.vue'
+
+const msg = useMessage()
 
 const items = ref<CfListItem[]>([])
 const total = ref(0)
@@ -28,9 +30,13 @@ let lastReq = 0
 
 async function load() {
   const cur = ++lastReq
-  const r = await searchCharacters(query.value, source.value, series.value || undefined, page.value, size)
-  if (cur !== lastReq) return  // 已被更新的请求取代
-  items.value = r.items; total.value = r.total
+  try {
+    const r = await searchCharacters(query.value, source.value, series.value || undefined, page.value, size)
+    if (cur !== lastReq) return  // 已被更新的请求取代
+    items.value = r.items; total.value = r.total
+  } catch (e: any) {
+    msg.error('加载失败：' + e.message)
+  }
 }
 async function loadSeries() {
   const list = await listCharacterSeries(source.value)
