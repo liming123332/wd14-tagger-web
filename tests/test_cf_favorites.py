@@ -23,3 +23,13 @@ def test_search_history_dedup_and_order(tmp_path):
     all_ = h.get_all()
     assert all_[0] == "char:anima:a"  # 最近在前
     assert len(all_) == 2  # 去重
+
+
+def test_search_history_truncation(tmp_path):
+    h = SearchHistoryDB(tmp_path / "recent.json")
+    for i in range(105):
+        h.add(f"k:{i}")
+    all_ = h.get_all()
+    assert len(all_) == 100
+    assert all_[0] == "k:104"          # 最新在前
+    assert "k:0" not in all_            # 最早 5 项被丢弃
