@@ -107,3 +107,6 @@ export const IconArtist = I(() => [
   h('circle', { cx: 12, cy: 7.5, r: 1.2, fill: 'currentColor', stroke: 'none' }),
   h('circle', { cx: 16.5, cy: 10.5, r: 1.2, fill: 'currentColor', stroke: 'none' }),
 ])
+export const IconBookmark = I(() => [
+  h('path', { d: 'M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z' }),
+])
