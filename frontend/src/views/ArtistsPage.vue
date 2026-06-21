@@ -2,7 +2,7 @@
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { NCard, NSelect, NInput, NEmpty, NPagination, NGrid, NGridItem, useMessage } from 'naive-ui'
 import ImageCard from '../components/ImageCard.vue'
-import { searchArtists, toggleArtistFavorite, parseEntryKey } from '../api/characterfinder'
+import { searchArtists, toggleArtistFavorite, listCfRecent, parseEntryKey } from '../api/characterfinder'
 
 const msg = useMessage()
 const SOURCE_OPTIONS = [
@@ -13,6 +13,7 @@ const source = ref('danbooru')
 const query = ref('')
 const page = ref(1); const size = ref(50)
 const total = ref(0); const items = ref<any[]>([])
+const recentItems = ref<any[]>([])
 const loading = ref(false)
 
 let timer: any = null
@@ -26,7 +27,10 @@ async function load() {
     items.value = r.items; total.value = r.total
   } catch (e: any) { msg.error('加载失败：' + e.message) } finally { if (myReq === lastReq) loading.value = false }
 }
-onMounted(load)
+onMounted(() => {
+  load()
+  listCfRecent('artist', 10).then(r => { recentItems.value = r.items || [] }).catch(() => {})
+})
 function onQuery() { clearTimeout(timer); timer = setTimeout(() => { page.value = 1; load() }, 350) }
 function onSource() { page.value = 1; load() }
 function onPage(p: number) { page.value = p; load() }
@@ -49,6 +53,14 @@ async function onToggleFav(item: any) {
 </script>
 
 <template>
+  <div v-if="recentItems.length" class="recent-bar">
+    <span class="recent-label">最近查看</span>
+    <div class="recent-scroll">
+      <ImageCard v-for="it in recentItems" :key="it.entry_key" :item="it" :to="cardTo(it)"
+                 :img-src="cardImg(it)" :title-text="it.name || ''"
+                 :tags-list="cardTags(it)" :favorite="!!it.favorite" style="width:140px" />
+    </div>
+  </div>
   <n-card class="filter-bar">
     <n-select v-model:value="source" :options="SOURCE_OPTIONS" size="small" style="width:160px" @update:value="onSource" />
     <n-input v-model:value="query" placeholder="搜索画师名 / tag" size="small" clearable style="width:240px" @update:value="onQuery" />
@@ -67,4 +79,8 @@ async function onToggleFav(item: any) {
 <style scoped>
 .filter-bar { margin-bottom: 12px }
 .filter-bar :deep(.n-card__content) { display: flex; gap: 8px; align-items: center; flex-wrap: wrap }
+.recent-bar { margin-bottom: 12px }
+.recent-label { font-size: 12px; font-weight: 600; color: var(--n-text-color-3, #6b7280) }
+.recent-scroll { display: flex; gap: 8px; overflow-x: auto; padding: 6px 0 4px }
+.recent-scroll :deep(.card) { flex: 0 0 140px }
 </style>

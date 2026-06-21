@@ -65,3 +65,33 @@ describe('ArtistsPage', () => {
     expect(calls.some(u => u.includes('/api/cf/artist/favorite?source=danbooru&key=1'))).toBe(true)
   })
 })
+
+// Task 5：列表页顶部「最近查看」横向滚动区。
+// listCfRecent 走 fetch('/api/cf/recent?kind=&limit=')，故沿用现有 vi.stubGlobal('fetch') mock 模式。
+describe('ArtistsPage 最近查看区', () => {
+  beforeEach(() => { vi.unstubAllGlobals(); push.mockClear() })
+
+  it('recent 非空时渲染 .recent-bar 且含卡片名称', async () => {
+    const recentItem = { entry_key: 'artist:danbooru:r1', source: 'danbooru', name: 'Recent Artist', tag: 'recent_artist', favorite: false }
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.includes('/api/cf/recent')) return { ok: true, json: async () => ({ items: [recentItem] }) } as any
+      if (url.includes('/api/cf/artists')) return { ok: true, json: async () => ({ items: [], total: 0 }) } as any
+      return { ok: true, json: async () => ({ items: [], total: 0 }) } as any
+    }))
+    const w = mount(ArtistsPage, { global: { stubs: { NImage: true, NGrid: SlotStub('div'), NGridItem: SlotStub('div') } } })
+    await flushPromises()
+    expect(w.find('.recent-bar').exists()).toBe(true)
+    expect(w.text()).toContain('Recent Artist')
+  })
+
+  it('recent 为空时 .recent-bar 不存在', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.includes('/api/cf/recent')) return { ok: true, json: async () => ({ items: [] }) } as any
+      if (url.includes('/api/cf/artists')) return { ok: true, json: async () => ({ items: [], total: 0 }) } as any
+      return { ok: true, json: async () => ({ items: [], total: 0 }) } as any
+    }))
+    const w = mount(ArtistsPage, { global: { stubs: { NImage: true, NGrid: SlotStub('div'), NGridItem: SlotStub('div') } } })
+    await flushPromises()
+    expect(w.find('.recent-bar').exists()).toBe(false)
+  })
+})

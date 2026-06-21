@@ -50,3 +50,36 @@ describe('CharactersPage', () => {
     expect(urls.some(u => u.includes('source=anima'))).toBe(true)
   })
 })
+
+// Task 5：列表页顶部「最近查看」横向滚动区。
+// listCfRecent 走 fetch('/api/cf/recent?kind=&limit=')，故沿用现有 vi.stubGlobal('fetch') mock 模式，
+// 在 fetch stub 内按 URL 分支返回不同数据。
+describe('CharactersPage 最近查看区', () => {
+  beforeEach(() => vi.unstubAllGlobals())
+
+  it('recent 非空时渲染 .recent-bar 且含卡片名称', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.includes('/api/cf/recent')) return {
+        ok: true,
+        json: async () => ({ items: [{ entry_key: 'char:danbooru:r1', source: 'danbooru', name: 'Recent One', core_tags: '1girl', favorite: false, thumb_url: '' }] }),
+      } as any
+      if (url.includes('/characters/series')) return { ok: true, json: async () => [] } as any
+      return { ok: true, json: async () => ({ items: [], total: 0 }) } as any
+    }))
+    const w = mount(CharactersPage, { global: { stubs: { NImage: true } } })
+    await flushPromises()
+    expect(w.find('.recent-bar').exists()).toBe(true)
+    expect(w.text()).toContain('Recent One')
+  })
+
+  it('recent 为空时 .recent-bar 不存在', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.includes('/api/cf/recent')) return { ok: true, json: async () => ({ items: [] }) } as any
+      if (url.includes('/characters/series')) return { ok: true, json: async () => [] } as any
+      return { ok: true, json: async () => ({ items: [], total: 0 }) } as any
+    }))
+    const w = mount(CharactersPage, { global: { stubs: { NImage: true } } })
+    await flushPromises()
+    expect(w.find('.recent-bar').exists()).toBe(false)
+  })
+})
