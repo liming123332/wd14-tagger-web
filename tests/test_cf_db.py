@@ -93,3 +93,57 @@ def test_artist_search_returns_tuple(tmp_path):
     rows, total = adb.search("ebi")
     assert total == 1
     assert isinstance(rows[0], dict) and rows[0]["tag"] == "ebifurya"
+
+
+def _char_db_multi(tmp_path):
+    """插 5 行不同角色（name/rank 各异），用于分页语义测试。"""
+    p = tmp_path / "characters.db"
+    c = sqlite3.connect(p); c.executescript(CHAR_DDL)
+    rows = [
+        ("hatsune miku", "vocaloid", "hatsune miku, vocaloid", "http://x/1.jpg", 1, "danbooru"),
+        ("saber", "fate", "saber, fate", "http://x/2.jpg", 2, "danbooru"),
+        ("rem", "re:zero", "rem, re:zero", "http://x/3.jpg", 3, "danbooru"),
+        ("megurine luka", "vocaloid", "megurine luka, vocaloid", "http://x/4.jpg", 4, "danbooru"),
+        ("asuna", "sword art online", "asuna, sao", "http://x/5.jpg", 5, "danbooru"),
+    ]
+    for r in rows:
+        c.execute("INSERT INTO characters(name,series,tags,image_url,rank,source) VALUES(?,?,?,?,?,?)", r)
+    c.commit(); c.close()
+    return CharacterDB(p)
+
+
+def test_char_search_total_pagination(tmp_path):
+    """CharacterDB.search 的 total = COUNT(*)（符合筛选总数），不受 limit 影响。"""
+    db = _char_db_multi(tmp_path)
+    rows, total = db.search("", limit=2, offset=0)
+    assert total == 5, "total 必须是筛选总数（5），而不是 limit 后行数"
+    assert len(rows) == 2, "limit=2 应只返回 2 行"
+
+
+def test_artist_search_total_pagination(tmp_path):
+    """ArtistDB.search 的 total = COUNT(*)（符合筛选总数），不受 limit 影响。"""
+    p = tmp_path / "artists.db"
+    c = sqlite3.connect(p); c.executescript(ARTIST_DDL)
+    artists = [
+        ("ebifurya", "ebifurya", "ebifurya", "http://x/1.jpg", "http://x/2.jpg", 1, "danbooru"),
+        ("artist_b", "artist_b", "Artist B", "http://x/3.jpg", "http://x/4.jpg", 2, "danbooru"),
+        ("artist_c", "artist_c", "Artist C", "http://x/5.jpg", "http://x/6.jpg", 3, "danbooru"),
+        ("artist_d", "artist_d", "Artist D", "http://x/7.jpg", "http://x/8.jpg", 4, "danbooru"),
+        ("artist_e", "artist_e", "Artist E", "http://x/9.jpg", "http://x/10.jpg", 5, "danbooru"),
+    ]
+    for a in artists:
+        c.execute("INSERT INTO artists(name,tag,display_name,image_url_1,image_url_2,rank,source) VALUES(?,?,?,?,?,?,?)", a)
+    c.commit(); c.close()
+    adb = ArtistDB(p)
+    rows, total = adb.search("", limit=2)
+    assert total == 5, "total 必须是筛选总数（5），而不是 limit 后行数"
+    assert len(rows) == 2, "limit=2 应只返回 2 行"
+
+
+def test_char_get_by_id_dict_get_contract(tmp_path):
+    """get_by_id 返回值必须支持 .get() 访问（防回归到 sqlite3.Row）。"""
+    db = _char_db(tmp_path)
+    got = db.get_by_id(1)
+    assert got is not None
+    assert got.get("name") == "hatsune miku", "返回 dict 必须支持 .get() 访问"
+    assert got.get("nonexistent_key") is None, "dict.get() 对缺失键应返回 None"
