@@ -32,6 +32,7 @@ from backend.deps import (
 )
 from backend.models import CfOverlay, CategoryData
 from backend.characterfinder import paths
+from backend.characterfinder.upload_validate import validate_image_bytes, MAX_UPLOAD_BYTES
 from backend.api.routes_cfassets import local_image_path
 
 router = APIRouter(prefix="/api/cf", tags=["cf-characters"])
@@ -218,6 +219,8 @@ def save_character(source: str, key: str, body: SaveRequest):
 def upload_character_image(source: str, key: str, file: UploadFile = File(...)):
     ek = paths.entry_key("char", source, key)
     data = file.file.read()
+    # 健壮性：先校验大小 + 魔数（M7+M8），坏图/超大文件不落盘（避免孤儿）。
+    validate_image_bytes(data)
     ext = "." + (file.filename.rsplit(".", 1)[-1].lower() if file.filename and "." in file.filename else "png")
     name = secrets.token_hex(8) + ext
     get_cf_overlay().set_image(ek, name)

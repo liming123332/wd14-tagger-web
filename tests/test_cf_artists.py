@@ -65,3 +65,34 @@ def test_anima_artist_detail_404_on_missing_key(tmp_path, monkeypatch):
     r = client.get("/api/cf/artist", params={"source": "anima", "key": "nonexistent"})
     assert r.status_code == 404
 
+
+# 健壮性 M7+M8：upload_artist_image 的大小 + 魔数校验，与角色端点对称。
+import io
+from PIL import Image
+
+
+def _png_bytes():
+    b = io.BytesIO(); Image.new("RGB", (20, 20)).save(b, format="PNG"); return b.getvalue()
+
+
+def test_artist_image_upload_validates_size_and_magic(tmp_path, monkeypatch):
+    client = TestClient(_app(tmp_path, monkeypatch))
+    from backend.characterfinder.upload_validate import MAX_UPLOAD_BYTES
+
+    # 正常 PNG 仍 200（不回归）
+    r_ok = client.post("/api/cf/artist/image", params={"source": "danbooru", "key": "1"},
+                       files={"file": ("a.png", io.BytesIO(_png_bytes()), "image/png")})
+    assert r_ok.status_code == 200
+    assert r_ok.json()["image_override"].endswith(".png")
+
+    # 超大 → 413
+    huge = b"\x00" * (MAX_UPLOAD_BYTES + 1)
+    r_big = client.post("/api/cf/artist/image", params={"source": "danbooru", "key": "1"},
+                        files={"file": ("big.png", io.BytesIO(huge), "image/png")})
+    assert r_big.status_code == 413
+
+    # 非图片 → 400
+    r_bad = client.post("/api/cf/artist/image", params={"source": "danbooru", "key": "1"},
+                        files={"file": ("fake.png", io.BytesIO(b"not an image"), "image/png")})
+    assert r_bad.status_code == 400
+

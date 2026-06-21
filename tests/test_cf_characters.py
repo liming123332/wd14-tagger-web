@@ -179,6 +179,36 @@ def test_image_upload_overrides_path(tmp_path, monkeypatch):
     assert written.exists() and written.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
 
 
+def test_image_upload_rejects_oversized(tmp_path, monkeypatch):
+    # 健壮性 M7：超过 10MB 直接 413，文件不落盘。
+    from backend.characterfinder.upload_validate import MAX_UPLOAD_BYTES
+    client = TestClient(_app(tmp_path, monkeypatch))
+    huge = b"\x00" * (MAX_UPLOAD_BYTES + 1)
+    r = client.post("/api/cf/character/image", params={"source": "danbooru", "key": "1"},
+                    files={"file": ("big.png", io.BytesIO(huge), "image/png")})
+    assert r.status_code == 413
+    # overlay 目录无文件落盘
+    from backend.characterfinder.paths import entry_key
+    from backend.storage.cf_overlay import _safe_name
+    safe = _safe_name(entry_key("char", "danbooru", "1"))
+    overlay_dir = tmp_path / "cf" / "overlay" / safe
+    assert not overlay_dir.exists() or not any(overlay_dir.iterdir())
+    # 详情里 image_override 仍为 None（未被污染）
+    d = client.get("/api/cf/character", params={"source": "danbooru", "key": "1"}).json()
+    assert d["image_override"] is None
+
+
+def test_image_upload_rejects_non_image(tmp_path, monkeypatch):
+    # 健壮性 M8：非合法图片字节（魔数校验失败）→ 400，文件不落盘。
+    client = TestClient(_app(tmp_path, monkeypatch))
+    r = client.post("/api/cf/character/image", params={"source": "danbooru", "key": "1"},
+                    files={"file": ("fake.png", io.BytesIO(b"not an image"), "image/png")})
+    assert r.status_code == 400
+    # 详情里 image_override 仍为 None
+    d = client.get("/api/cf/character", params={"source": "danbooru", "key": "1"}).json()
+    assert d["image_override"] is None
+
+
 def test_save_persists_categories(tmp_path, monkeypatch):
     client = TestClient(_app(tmp_path, monkeypatch))
     r = client.put("/api/cf/character", params={"source": "danbooru", "key": "1"},
