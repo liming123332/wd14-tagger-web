@@ -32,9 +32,9 @@ def _danbooru_artist(row: dict, fav: bool) -> dict:
 
 
 def _anima_artist(row: dict, fav: bool) -> dict:
-    key = row["artist"]
+    key = row.get("artist")
     return {"entry_key": paths.entry_key("artist", "anima", key), "source": "anima",
-            "name": row.get("name"), "tag": row.get("trigger") or row["artist"],
+            "name": row.get("name"), "tag": row.get("trigger") or row.get("artist"),
             "thumb1_url": _asset("artist", "anima", key, "1"),
             "thumb2_url": _asset("artist", "anima", key, "2"), "favorite": fav}
 
@@ -56,7 +56,9 @@ def search_artists(query: str = "", source: str = Query(...),
 @router.get("/artist")
 def get_artist(source: str = Query(...), key: str = Query(...)):
     if source == "anima":
-        row = get_anima_artist_db().get_by_artist(key) or {}
+        row = get_anima_artist_db().get_by_artist(key)
+        if not row:
+            raise HTTPException(status_code=404, detail="not found")
         base = _anima_artist(row, False)
     else:
         row = get_artist_db().get_by_id(int(key))

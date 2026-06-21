@@ -59,7 +59,7 @@ def _danbooru_item(row: dict, favorite: bool) -> dict:
 
 
 def _anima_item(row: dict, favorite: bool) -> dict:
-    key = row["character"]
+    key = row.get("character")
     return {
         "entry_key": paths.entry_key("char", "anima", key),
         "source": "anima", "name": row.get("name"),
@@ -108,7 +108,9 @@ def list_series(source: str = Query(...)):
 def get_character(source: str = Query(...), key: str = Query(...)):
     # 权威字段
     if source == "anima":
-        row = get_anima_character_db().get_by_character(key) or {}
+        row = get_anima_character_db().get_by_character(key)
+        if not row:
+            raise HTTPException(status_code=404, detail="not found")
         base = _anima_item(row, False)
     else:
         row = get_character_db().get_by_id(int(key))
