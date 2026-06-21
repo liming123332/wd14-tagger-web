@@ -478,6 +478,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import CfFavoritesPage from '../views/CfFavoritesPage.vue'
 
+// ImageCard 内部用 useRouter/useMessage/fileUrl，需注入 provider + importActual 保留真实导出
+// （naive-ui 真实组件需保留，findAllComponents({name:'ImageCard'}) 才能命中）
+vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
+vi.mock('naive-ui', async () => {
+  const actual: any = await vi.importActual('naive-ui')
+  return { ...actual, useMessage: () => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }) }
+})
+vi.mock('../api/client', async () => ({ ...(await vi.importActual('../api/client')) }))
+
 const favData: Record<string, any> = {
   char: { items: [
     { entry_key: 'char:danbooru:1', source: 'danbooru', name: 'Hatsune Miku', core_tags: 'vocaloid,twins', favorite: true },
@@ -488,14 +497,16 @@ const favData: Record<string, any> = {
   ] },
 }
 
-vi.mock('../api/characterfinder', () => ({
-  listCfFavorites: vi.fn(async (kind: string) => favData[kind] || { items: [] }),
-  toggleCharacterFavorite: vi.fn(async () => ({ favorite: false })),
-  toggleArtistFavorite: vi.fn(async () => ({ favorite: false })),
-  parseEntryKey: (ek: string) => {
-    const p = ek.split(':'); return { kind: p[0], source: p[1], key: p.slice(2).join(':') }
-  },
-}))
+// importActual 保留 parseEntryKey（cardTo 渲染时用），仅覆盖 listCfFavorites + 两 toggle
+vi.mock('../api/characterfinder', async () => {
+  const actual: any = await vi.importActual('../api/characterfinder')
+  return {
+    ...actual,
+    listCfFavorites: vi.fn(async (kind: string) => favData[kind] || { items: [] }),
+    toggleCharacterFavorite: vi.fn(async () => ({ favorite: false })),
+    toggleArtistFavorite: vi.fn(async () => ({ favorite: false })),
+  }
+})
 
 import { listCfFavorites, toggleCharacterFavorite } from '../api/characterfinder'
 
@@ -510,8 +521,8 @@ describe('CfFavoritesPage', () => {
   it('切 tab 到 artist 加载艺术家收藏', async () => {
     const w = mount(CfFavoritesPage); await flushPromises()
     ;(listCfFavorites as any).mockClear()
-    // NTabs v-model:value 经 @update:value 触发（比点 NTab 更可靠）
-    await w.findComponent({ name: 'NTabs' }).vm.$emit('update:value', 'artist')
+    // naive-ui NTabs 真实 name 为 'Tabs'；v-model:value 经 @update:value 触发
+    await w.findComponent({ name: 'Tabs' }).vm.$emit('update:value', 'artist')
     await flushPromises()
     expect(listCfFavorites).toHaveBeenCalledWith('artist')
   })
@@ -534,7 +545,8 @@ describe('CfFavoritesPage', () => {
 
   it('前端搜索过滤 name', async () => {
     const w = mount(CfFavoritesPage); await flushPromises()
-    const input = w.findComponent({ name: 'NInput' })
+    // naive-ui NInput 真实 name 为 'Input'
+    const input = w.findComponent({ name: 'Input' })
     await input.vm.$emit('update:value', 'kafka')
     await flushPromises()
     const cards = w.findAllComponents({ name: 'ImageCard' })
