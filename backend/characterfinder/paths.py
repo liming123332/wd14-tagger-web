@@ -2,6 +2,9 @@
 from __future__ import annotations
 from backend.config import settings
 
+_VALID_KINDS = ("char", "artist")
+_VALID_SOURCES = ("danbooru", "e621", "anima")
+
 CHARACTERS_DB = settings.CF_DIR / "characters.db"
 ARTISTS_DB = settings.CF_DIR / "artists.db"
 ANIMA_CHARACTERS_DB = settings.CF_DIR / "anima_characters.db"
@@ -16,9 +19,9 @@ OVERLAY_DIR = settings.CF_OVERLAY_DIR
 
 def entry_key(kind: str, source: str, key: str) -> str:
     """kind∈{char,artist}, source∈{danbooru,e621,anima}, key=库主键。"""
-    if kind not in ("char", "artist"):
+    if kind not in _VALID_KINDS:
         raise ValueError(f"bad kind {kind!r}")
-    if source not in ("danbooru", "e621", "anima"):
+    if source not in _VALID_SOURCES:
         raise ValueError(f"bad source {source!r}")
     if not key:
         raise ValueError("empty key")
@@ -30,6 +33,6 @@ def parse_entry_key(ek: str) -> tuple[str, str, str]:
     if len(parts) != 3:
         raise ValueError(f"bad entry_key {ek!r}")
     kind, source, key = parts
-    if kind not in ("char", "artist") or source not in ("danbooru", "e621", "anima") or not key:
+    if kind not in _VALID_KINDS or source not in _VALID_SOURCES or not key:
         raise ValueError(f"bad entry_key {ek!r}")
     return kind, source, key

@@ -1,3 +1,5 @@
+import pytest
+
 from backend.characterfinder import paths
 
 
@@ -15,7 +17,28 @@ def test_entry_key_roundtrip():
     assert paths.parse_entry_key(k) == ("char", "anima", "001_(darling_in_the_franxx)")
 
 
+def test_entry_key_rejects_invalid():
+    # 非法 kind
+    with pytest.raises(ValueError):
+        paths.entry_key("bogus", "danbooru", "1")
+    # 非法 source
+    with pytest.raises(ValueError):
+        paths.entry_key("char", "bogus", "1")
+    # 空 key
+    with pytest.raises(ValueError):
+        paths.entry_key("char", "danbooru", "")
+
+
 def test_parse_entry_key_rejects_bad():
-    import pytest
+    # 格式不合法
     with pytest.raises(ValueError):
         paths.parse_entry_key("bogus")
+    # 非法 kind
+    with pytest.raises(ValueError):
+        paths.parse_entry_key("bogus:danbooru:1")
+    # 非法 source
+    with pytest.raises(ValueError):
+        paths.parse_entry_key("char:bogus:1")
+    # 空 key
+    with pytest.raises(ValueError):
+        paths.parse_entry_key("char:danbooru:")
