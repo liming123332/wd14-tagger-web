@@ -4,6 +4,7 @@ import { h } from 'vue'
 import {
   IconUpload, IconGallery, IconCheck, IconCopy, IconDownload,
   IconSun, IconMoon, IconMonitor,
+  IconCharacter, IconArtist,
 } from '../components/icons'
 
 const wrap = (I: any) => mount({ render: () => h(I) })
@@ -29,5 +30,12 @@ describe('icons', () => {
       render: () => h('div', Array.from({ length: N }, () => h(IconCopy))),
     })
     expect(wrapper.findAll('svg').length).toBe(N)
+  })
+})
+
+describe('cf icons', () => {
+  it('IconCharacter / IconArtist 已导出且为功能组件', () => {
+    expect(IconCharacter).toBeTruthy()
+    expect(IconArtist).toBeTruthy()
   })
 })
