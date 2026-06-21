@@ -136,6 +136,9 @@ def prepare_runtime(force: bool) -> None:
 
 def _ignore_when_copy(directory: Path, names: list[str]) -> set[str]:
     ignore = set()
+    # 不拷开发版的 anima 封面图（5万+文件，由 copy_cf_data 从 animadex-data 权威拷贝）
+    if Path(directory).name == "characterfinder" and "anima" in names:
+        ignore.add("anima")
     for n in names:
         if n in EXCLUDE_DIRS:
             ignore.add(n)
@@ -181,6 +184,64 @@ def copy_source() -> None:
             else:
                 p.unlink()
     log("已清空 models/ 与 data/ 用户数据（保留空目录）")
+    copy_cf_data()
+
+
+def copy_cf_data() -> None:
+    """从兄弟目录 sd-character-finder/data/ 拷角色/艺术家离线数据到整合包。
+
+    characterfinder 的 5 个 SQLite 库 + danbooru_tags.csv 由上游 sdcf 抓取生成,
+    不在 wd14-tagger-web 仓库内。若不补，整合包 data/characterfinder/ 只有空壳，
+    后端 _migrate() 会因 'no such table: characters' 崩溃（角色/艺术家功能不可用）。
+
+    只拷权威数据（5 DB + csv + 封面目录）；运行时数据（cf_overlay.db /
+    favorites.json / recent_viewed.json / overlay/）不覆盖，保留各自初始状态。
+    源目录不存在时警告跳过（不阻断打包——可能未克隆 sdcf）。
+    """
+    dest_cf = PKG_ROOT / "wd14-tagger-web" / "data" / "characterfinder"
+    dest_cf.mkdir(parents=True, exist_ok=True)
+
+    # 1) 角色/艺术家库 + danbooru 封面（sdcf 抓取产物）
+    sdcf_data = SRC_ROOT.parent / "sd-character-finder" / "data"
+    if sdcf_data.exists():
+        files = ["characters.db", "artists.db", "anima_characters.db",
+                 "anima_artists.db", "danbooru_tags.csv"]
+        copied = []
+        for f in files:
+            src = sdcf_data / f
+            if src.exists():
+                shutil.copy2(src, dest_cf / f)
+                copied.append(f"{f}({src.stat().st_size // 1024}KB)")
+        for d in ("covers", "artist_covers"):
+            src_d = sdcf_data / d
+            dst_d = dest_cf / d
+            if dst_d.exists():
+                shutil.rmtree(dst_d)
+            if src_d.exists():
+                shutil.copytree(src_d, dst_d)
+                copied.append(f"{d}/")
+        log(f"已拷角色/艺术家库到 data/characterfinder/: {', '.join(copied)}")
+    else:
+        log("⚠️ 未找到 ../sd-character-finder/data/，缺少角色库（后端会报 'no such table'）")
+
+    # 2) anima 封面（本地离线缩略图；后端 local_image_path 期望在 anima/ 下，
+    #    否则离线时 /api/cf/asset 回退 CDN blobs.animadex.net 会加载失败）
+    animadex = SRC_ROOT.parent / "animadex-data"
+    if animadex.exists():
+        anima_dst = dest_cf / "anima"
+        batches = 0
+        for s, d in [("characters/thumbs", "characters"),
+                     ("characters/images", "characters"),
+                     ("artists/thumbs", "artists"),
+                     ("artists/images", "artists")]:
+            sp = animadex / s
+            if sp.exists():
+                (anima_dst / d).mkdir(parents=True, exist_ok=True)
+                shutil.copytree(sp, anima_dst / d, dirs_exist_ok=True)
+                batches += 1
+        log(f"已拷 anima 封面到 data/characterfinder/anima/（{batches} 批，离线缩略图）")
+    else:
+        log("⚠️ 未找到 ../animadex-data/，anima 封面将走 CDN（离线无图）")
 
 
 def write_launchers() -> None:
@@ -242,6 +303,31 @@ def write_launchers() -> None:
         encoding="utf-8",
     )
     log(f"写入 {update_note.name}")
+
+    # 更新anima数据.bat：双击即从本机 animadex-data 同步角色/艺术家数据到整合包 data。
+    # 前置是用户先用 AnimaDex\import.bat 拉取最新数据；本 bat 只负责把数据搬进整合包。
+    # %* 透传参数，故命令行可追加 --prune / --animadex-data 等。
+    anima_bat = PKG_ROOT / "更新anima数据.bat"
+    anima_bat.write_text(
+        "@echo off\r\n"
+        "chcp 65001 >nul\r\n"
+        'cd /d "%~dp0"\r\n'
+        "echo.\r\n"
+        "echo ===== 更新 Anima 角色/艺术家数据 =====\r\n"
+        "echo 从本机 animadex-data 同步到整合包 data\r\n"
+        "echo 前提：先用 AnimaDex\\import.bat 拉取最新数据\r\n"
+        "echo ========================================\r\n"
+        "echo.\r\n"
+        'if not exist "runtime\\python.exe" (\r\n'
+        "    echo [错误] 未找到 runtime\\python.exe，这不是完整整合包。\r\n"
+        "    pause & exit /b 1\r\n"
+        ")\r\n"
+        '"%~dp0runtime\\python.exe" "%~dp0wd14-tagger-web\\scripts\\update_anima.py" %*\r\n'
+        "echo.\r\n"
+        "pause\r\n",
+        encoding="utf-8",
+    )
+    log(f"写入 {anima_bat.name}")
 
 
 def fetch_vcredist() -> None:
