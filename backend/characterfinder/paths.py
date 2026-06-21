@@ -1,0 +1,35 @@
+"""Character Finder 数据路径与 entry_key 编解码。"""
+from __future__ import annotations
+from backend.config import settings
+
+CHARACTERS_DB = settings.CF_DIR / "characters.db"
+ARTISTS_DB = settings.CF_DIR / "artists.db"
+ANIMA_CHARACTERS_DB = settings.CF_DIR / "anima_characters.db"
+ANIMA_ARTISTS_DB = settings.CF_DIR / "anima_artists.db"
+DANBOORU_TAGS_CSV = settings.CF_DIR / "danbooru_tags.csv"
+COVERS_DIR = settings.CF_COVERS_DIR
+ARTIST_COVERS_DIR = settings.CF_ARTIST_COVERS_DIR
+ANIMA_DIR = settings.CF_ANIMA_DIR
+OVERLAY_DB = settings.CF_OVERLAY_DB
+OVERLAY_DIR = settings.CF_OVERLAY_DIR
+
+
+def entry_key(kind: str, source: str, key: str) -> str:
+    """kind∈{char,artist}, source∈{danbooru,e621,anima}, key=库主键。"""
+    if kind not in ("char", "artist"):
+        raise ValueError(f"bad kind {kind!r}")
+    if source not in ("danbooru", "e621", "anima"):
+        raise ValueError(f"bad source {source!r}")
+    if not key:
+        raise ValueError("empty key")
+    return f"{kind}:{source}:{key}"
+
+
+def parse_entry_key(ek: str) -> tuple[str, str, str]:
+    parts = ek.split(":", 2)
+    if len(parts) != 3:
+        raise ValueError(f"bad entry_key {ek!r}")
+    kind, source, key = parts
+    if kind not in ("char", "artist") or source not in ("danbooru", "e621", "anima") or not key:
+        raise ValueError(f"bad entry_key {ek!r}")
+    return kind, source, key
