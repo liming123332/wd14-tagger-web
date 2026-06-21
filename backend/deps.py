@@ -66,3 +66,53 @@ def _release_taggers() -> list[str]:
     _tagger_cache.clear()
     gc.collect()  # 兜底：强制回收已无引用的 session 对象
     return released
+
+
+# === Character Finder ===
+@lru_cache
+def get_character_db():
+    from backend.characterfinder.character_db import CharacterDB
+    return CharacterDB()
+
+
+@lru_cache
+def get_artist_db():
+    from backend.characterfinder.artist_db import ArtistDB
+    return ArtistDB()
+
+
+@lru_cache
+def get_anima_character_db():
+    from backend.characterfinder.anima_db import AnimaCharacterDB
+    return AnimaCharacterDB()
+
+
+@lru_cache
+def get_anima_artist_db():
+    from backend.characterfinder.anima_db import AnimaArtistDB
+    return AnimaArtistDB()
+
+
+@lru_cache
+def get_cf_overlay():
+    from backend.storage.cf_overlay import CfOverlayStore
+    from backend.config import settings
+    return CfOverlayStore(settings.CF_OVERLAY_DB, settings.CF_OVERLAY_DIR)
+
+
+@lru_cache
+def get_cf_favorites():
+    from backend.characterfinder.favorites import FavoritesDB
+    return FavoritesDB()
+
+
+@lru_cache
+def get_cf_artist_favorites():
+    from backend.characterfinder.favorites import ArtistFavoritesDB
+    return ArtistFavoritesDB()
+
+
+@lru_cache
+def get_cf_recent():
+    from backend.characterfinder.favorites import SearchHistoryDB
+    return SearchHistoryDB()

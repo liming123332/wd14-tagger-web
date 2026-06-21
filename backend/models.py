@@ -67,3 +67,19 @@ class PromptboxItem(BaseModel):
     gen_threshold: float = 0.35
     char_threshold: float = 0.90
     raw_tags: dict[str, float] = Field(default_factory=dict)
+
+
+class CfOverlay(BaseModel):
+    """角色/艺术家条目的用户层数据（反推结果/编辑/换图），与权威 db 物理隔离。"""
+    entry_key: str
+    kind: str  # 'char' | 'artist'
+    custom_tags: list[str] = Field(default_factory=list)
+    categories: dict[str, CategoryData] = Field(default_factory=dict)
+    extras: CategoryData = Field(default_factory=CategoryData)
+    image_override: str | None = None  # 替换图文件名（存 overlay/<safe>/）
+    model: str = "wd14"
+    gen_threshold: float = 0.35
+    char_threshold: float = 0.90
+    raw_tags: dict[str, float] = Field(default_factory=dict)
+    created_at: str = ""
+    updated_at: str = ""
