@@ -13,6 +13,7 @@ import CharactersPage from './views/CharactersPage.vue'
 import CharacterDetailPage from './views/CharacterDetailPage.vue'
 import ArtistsPage from './views/ArtistsPage.vue'
 import ArtistDetailPage from './views/ArtistDetailPage.vue'
+import CfFavoritesPage from './views/CfFavoritesPage.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -25,6 +26,7 @@ export const router = createRouter({
     { path: '/characters/:source/:key', component: CharacterDetailPage, props: true },
     { path: '/artists', component: ArtistsPage },
     { path: '/artists/:source/:key', component: ArtistDetailPage, props: true },
+    { path: '/cf/favorites', component: CfFavoritesPage },
     { path: '/random', component: RandomPage },
     { path: '/detail/:id', component: DetailPage, props: true },
     { path: '/batch/:id', component: BatchDetailPage, props: true },
