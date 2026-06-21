@@ -2,6 +2,7 @@ import sqlite3
 from fastapi.testclient import TestClient
 from backend.main import create_app
 from backend import deps
+from backend.models import CfOverlay, CategoryData
 
 
 def _app(tmp_path, monkeypatch):
@@ -49,3 +50,42 @@ def test_series_endpoint(tmp_path, monkeypatch):
     r = client.get("/api/cf/characters/series", params={"source": "danbooru"})
     assert r.status_code == 200
     assert any(s["series"] == "vocaloid" for s in r.json())
+
+
+def test_get_detail_with_overlay(tmp_path, monkeypatch):
+    # 覆盖 routes_characters.get_character 的 overlay 合并分支：
+    # categories 序列化、extras 双重三元、custom_tags/model/gen_threshold/
+    # char_threshold/image_override 取自 overlay 的分支，同时确认 locked_tags 不被 overlay 篡改。
+    client = TestClient(_app(tmp_path, monkeypatch))
+    # _app 已对 get_cf_overlay 做 cache_clear，此处拿到的 store 连的是 tmp 路径下的 db
+    store = deps.get_cf_overlay()
+    ov = CfOverlay(
+        entry_key="char:danbooru:1",
+        kind="char",
+        custom_tags=["artist:x"],
+        categories={"角色": CategoryData(tags=["hatsune_miku"], phrase="vocaloid", user_edited=True)},
+        extras=CategoryData(tags=["1girl", "solo"], phrase="", user_edited=False),
+        model="wd14",
+        gen_threshold=0.5,
+        char_threshold=0.95,
+    )
+    store.upsert(ov)
+    r = client.get("/api/cf/character", params={"source": "danbooru", "key": "1"})
+    assert r.status_code == 200
+    d = r.json()
+    # custom_tags 走 ov.custom_tags 分支（非默认 []）
+    assert "artist:x" in d["custom_tags"]
+    # categories 走 {k: v.model_dump() ...} 序列化分支（非默认 {}，且 value 是 dict）
+    assert d["categories"] != {}
+    assert all(isinstance(v, dict) for v in d["categories"].values())
+    assert d["categories"]["角色"]["tags"] == ["hatsune_miku"]
+    assert d["categories"]["角色"]["user_edited"] is True
+    # extras 走 ov.extras.model_dump() 分支（非默认 {"tags":[],"phrase":"","user_edited":False}）
+    assert isinstance(d["extras"], dict)
+    assert d["extras"]["tags"] == ["1girl", "solo"]
+    # 阈值与 model 取自 overlay
+    assert d["model"] == "wd14"
+    assert d["gen_threshold"] == 0.5
+    assert d["char_threshold"] == 0.95
+    # 关键：overlay 不改 locked_tags，权威 trigger/core_tags 仍生效
+    assert "miku" in d["locked_tags"]
