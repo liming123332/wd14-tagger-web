@@ -52,3 +52,15 @@ def test_get_tagger_wd_still_onnx_tagger():
     from backend.tagger.core import OnnxTagger
     assert isinstance(deps.get_tagger("wd14"), OnnxTagger)
     assert isinstance(deps.get_tagger("e621"), OnnxTagger)
+
+
+def test_cf_factories_cached():
+    from backend import deps
+    deps.get_character_db.cache_clear()
+    deps.get_artist_db.cache_clear()
+    deps.get_anima_character_db.cache_clear()
+    deps.get_anima_artist_db.cache_clear()
+    deps.get_cf_overlay.cache_clear()
+    a = deps.get_character_db(); b = deps.get_character_db()
+    assert a is b
+    assert deps.get_cf_overlay() is deps.get_cf_overlay()
