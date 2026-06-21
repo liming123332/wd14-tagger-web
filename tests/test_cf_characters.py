@@ -89,3 +89,61 @@ def test_get_detail_with_overlay(tmp_path, monkeypatch):
     assert d["char_threshold"] == 0.95
     # 关键：overlay 不改 locked_tags，权威 trigger/core_tags 仍生效
     assert "miku" in d["locked_tags"]
+
+
+import io
+from PIL import Image
+
+
+def _png():
+    b = io.BytesIO(); Image.new("RGB", (20, 20)).save(b, format="PNG"); b.seek(0); return b
+
+
+class _FakeTagger:
+    def tag_image(self, pil, gen_th=0.35, char_th=0.9, use_char=True):
+        return {"long hair": 0.9, "dress": 0.7, "weird thing": 0.4}
+
+
+def _tag_app(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch)
+    # brief 的 _app 只 patch 了 settings.CF_DIR，未 patch 模块级常量 paths.COVERS_DIR
+    # （它在 import 时已绑定到真实 data 目录）。tag 端点经 local_image_path 查封面时
+    # 走 paths.COVERS_DIR，故此处必须同步 patch，测试才能找到自放的 miku.jpg。
+    monkeypatch.setattr("backend.characterfinder.paths.COVERS_DIR", tmp_path / "cf" / "covers")
+    monkeypatch.setattr("backend.api.routes_characters.get_tagger", lambda model="wd14": _FakeTagger())
+    return app
+
+
+def test_tag_writes_overlay(tmp_path, monkeypatch):
+    client = TestClient(_tag_app(tmp_path, monkeypatch))
+    # 先放一张本地封面供反推读取
+    (tmp_path / "cf" / "covers").mkdir()
+    (tmp_path / "cf" / "covers" / "miku.jpg").write_bytes(_png().read())
+    r = client.post("/api/cf/character/tag", params={"source": "danbooru", "key": "1"},
+                    json={"model": "wd14", "gen_th": 0.35, "char_th": 0.9, "use_char": True})
+    assert r.status_code == 200
+    d = r.json()
+    assert "long hair" in d["categories"]["head"]["tags"]
+    assert "dress" in d["categories"]["clothing"]["tags"]
+    assert "weird thing" in d["extras"]["tags"]
+    # 权威 trigger 仍在锁定标签
+    assert "miku" in d["locked_tags"]
+
+
+def test_save_persists_categories(tmp_path, monkeypatch):
+    client = TestClient(_app(tmp_path, monkeypatch))
+    r = client.put("/api/cf/character", params={"source": "danbooru", "key": "1"},
+                   json={"categories": {"head": {"tags": ["my tag"], "phrase": "", "user_edited": True}},
+                         "extras": {"tags": [], "phrase": "", "user_edited": False}, "custom_tags": ["fav"]})
+    assert r.status_code == 200
+    again = client.get("/api/cf/character", params={"source": "danbooru", "key": "1"}).json()
+    assert again["categories"]["head"]["tags"] == ["my tag"]
+    assert again["custom_tags"] == ["fav"]
+
+
+def test_favorite_toggle(tmp_path, monkeypatch):
+    client = TestClient(_app(tmp_path, monkeypatch))
+    r = client.post("/api/cf/character/favorite", params={"source": "danbooru", "key": "1"})
+    assert r.json()["favorite"] is True
+    r2 = client.post("/api/cf/character/favorite", params={"source": "danbooru", "key": "1"})
+    assert r2.json()["favorite"] is False
