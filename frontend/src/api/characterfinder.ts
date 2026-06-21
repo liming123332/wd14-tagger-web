@@ -130,3 +130,18 @@ export async function uploadArtistImage(source: string, key: string, file: File)
 export async function toggleArtistFavorite(source: string, key: string): Promise<{ favorite: boolean }> {
   return fetch(`${base}/api/cf/artist/favorite?${cfQuery(source, key)}`, { method: 'POST' }).then(r => r.json())
 }
+
+// ===== 收藏 / 最近 / 随机（消费 P1 Task 11 只读端点）=====
+export async function listCfFavorites(kind: 'char' | 'artist'): Promise<{ items: CfListItem[] }> {
+  return fetch(`${base}/api/cf/favorites?kind=${encodeURIComponent(kind)}`).then(r => r.json())
+}
+
+export async function listCfRecent(kind: 'char' | 'artist', limit = 50): Promise<{ items: CfListItem[] }> {
+  const q = new URLSearchParams({ kind, limit: String(limit) })
+  return fetch(`${base}/api/cf/recent?${q}`).then(r => r.json())
+}
+
+export async function randomCf(type: 'characters' | 'artists', source: string, size = 24): Promise<{ items: CfListItem[] }> {
+  const q = new URLSearchParams({ type, source, size: String(size) })
+  return fetch(`${base}/api/cf/random?${q}`).then(r => r.json())
+}
