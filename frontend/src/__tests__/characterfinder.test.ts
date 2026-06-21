@@ -6,6 +6,7 @@ import {
   uploadCharacterImage, toggleCharacterFavorite,
   searchArtists, getArtist, tagArtist, reclassifyArtist, saveArtist,
   uploadArtistImage, toggleArtistFavorite,
+  listCfFavorites, listCfRecent, randomCf,
 } from '../api/characterfinder'
 
 describe('parseEntryKey', () => {
@@ -206,5 +207,52 @@ describe('artists 同构', () => {
     await reclassifyArtist('danbooru', '1', { clothing: ['suit'] })
     expect(seen[0].url).toBe('/api/cf/artist/reclassify?source=danbooru&key=1')
     expect(JSON.parse(seen[0].body)).toEqual({ keep: { clothing: ['suit'] } })
+  })
+})
+
+describe('cf favorites/recent/random', () => {
+  beforeEach(() => vi.unstubAllGlobals())
+  it('listCfFavorites GET /api/cf/favorites?kind=', async () => {
+    const urls: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      urls.push(url); return { ok: true, json: async () => ({ items: [] }) } as any
+    }))
+    await listCfFavorites('artist')
+    expect(urls[0]).toContain('/api/cf/favorites?kind=artist')
+  })
+  it('listCfRecent GET /api/cf/recent?kind=&limit=', async () => {
+    const urls: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      urls.push(url); return { ok: true, json: async () => ({ items: [] }) } as any
+    }))
+    await listCfRecent('char', 10)
+    expect(urls[0]).toContain('/api/cf/recent?kind=char')
+    expect(urls[0]).toContain('limit=10')
+  })
+  it('listCfRecent 默认 limit=50', async () => {
+    const urls: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      urls.push(url); return { ok: true, json: async () => ({ items: [] }) } as any
+    }))
+    await listCfRecent('char')
+    expect(urls[0]).toContain('limit=50')
+  })
+  it('randomCf GET /api/cf/random?type=&source=&size=', async () => {
+    const urls: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      urls.push(url); return { ok: true, json: async () => ({ items: [] }) } as any
+    }))
+    await randomCf('artists', 'anima', 12)
+    expect(urls[0]).toContain('/api/cf/random?type=artists')
+    expect(urls[0]).toContain('source=anima')
+    expect(urls[0]).toContain('size=12')
+  })
+  it('randomCf 默认 size=24', async () => {
+    const urls: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      urls.push(url); return { ok: true, json: async () => ({ items: [] }) } as any
+    }))
+    await randomCf('characters', 'danbooru')
+    expect(urls[0]).toContain('size=24')
   })
 })

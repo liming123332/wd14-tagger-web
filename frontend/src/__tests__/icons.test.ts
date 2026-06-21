@@ -4,7 +4,7 @@ import { h } from 'vue'
 import {
   IconUpload, IconGallery, IconCheck, IconCopy, IconDownload,
   IconSun, IconMoon, IconMonitor,
-  IconCharacter, IconArtist,
+  IconCharacter, IconArtist, IconBookmark,
 } from '../components/icons'
 
 const wrap = (I: any) => mount({ render: () => h(I) })
@@ -13,6 +13,7 @@ describe('icons', () => {
   it.each([
     ['IconUpload', IconUpload], ['IconGallery', IconGallery],
     ['IconCheck', IconCheck], ['IconCopy', IconCopy], ['IconDownload', IconDownload],
+    ['IconBookmark', IconBookmark],
   ])('%s 渲染一个 svg', (_name, I) => {
     expect(wrap(I).find('svg').exists()).toBe(true)
   })

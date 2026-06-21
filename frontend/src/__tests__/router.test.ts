@@ -9,4 +9,9 @@ describe('router routes', () => {
     expect(paths).toContain('/artists')
     expect(paths).toContain('/artists/:source/:key')
   })
+
+  it('/cf/favorites 路由已注册', () => {
+    const paths = router.getRoutes().map(r => r.path)
+    expect(paths).toContain('/cf/favorites')
+  })
 })

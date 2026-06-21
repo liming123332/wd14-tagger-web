@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { NCard, NGrid, NGridItem, NPagination, NEmpty, NSelect, NInput, useMessage } from 'naive-ui'
 import {
-  searchCharacters, listCharacterSeries, toggleCharacterFavorite, parseEntryKey,
+  searchCharacters, listCharacterSeries, toggleCharacterFavorite, listCfRecent, parseEntryKey,
   type CfListItem,
 } from '../api/characterfinder'
 import ImageCard from '../components/ImageCard.vue'
@@ -17,6 +17,7 @@ const query = ref('')
 const source = ref('danbooru')
 const series = ref<string | null>(null)
 const seriesOptions = ref<{ label: string; value: string }[]>([])
+const recentItems = ref<CfListItem[]>([])
 
 const SOURCE_OPTIONS = [
   { label: 'Danbooru', value: 'danbooru' },
@@ -42,7 +43,10 @@ async function loadSeries() {
   const list = await listCharacterSeries(source.value)
   seriesOptions.value = Array.isArray(list) ? list.map(s => ({ label: `${s.series} (${s.count})`, value: s.series })) : []
 }
-onMounted(() => { load(); loadSeries() })
+onMounted(() => {
+  load(); loadSeries()
+  listCfRecent('char', 10).then(r => { recentItems.value = r.items || [] }).catch(() => {})
+})
 
 function onSource(v: string) {
   source.value = v; page.value = 1; series.value = null
@@ -81,6 +85,14 @@ async function onToggleFav(it: CfListItem) {
 </script>
 
 <template>
+  <div v-if="recentItems.length" class="recent-bar">
+    <span class="recent-label">最近查看</span>
+    <div class="recent-scroll">
+      <ImageCard v-for="it in recentItems" :key="it.entry_key" :item="it" :to="cardTo(it)"
+                 :img-src="cardImg(it)" :title-text="it.name || ''"
+                 :tags-list="cardTags(it)" :favorite="it.favorite" style="width:140px" />
+    </div>
+  </div>
   <n-card size="small" class="filter-bar" style="margin-bottom:16px">
     <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
       <div class="field"><span class="field-label">来源</span>
@@ -111,4 +123,10 @@ async function onToggleFav(it: CfListItem) {
 <style scoped>
 .field { display: flex; align-items: center; gap: 8px }
 .field-label { font-size: 13px; font-weight: 600; color: var(--n-text-color-3, #6b7280); min-width: 28px }
+.recent-bar { margin-bottom: 12px }
+.recent-label { font-size: 12px; font-weight: 600; color: var(--n-text-color-3, #6b7280) }
+.recent-scroll {
+  display: flex; gap: 8px; overflow-x: auto; padding: 6px 0 4px;
+}
+.recent-scroll :deep(.card) { flex: 0 0 140px }
 </style>
