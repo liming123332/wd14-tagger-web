@@ -226,3 +226,94 @@ def test_favorite_toggle(tmp_path, monkeypatch):
     assert r.json()["favorite"] is True
     r2 = client.post("/api/cf/character/favorite", params={"source": "danbooru", "key": "1"})
     assert r2.json()["favorite"] is False
+
+
+# ============================================================================
+# 主题 2：anima 端到端 + char anima 404 对称（M4+M6+M14）。
+# anima characters 表 DDL（与 tests/test_cf_anima_db.py / scripts/import_anima.py 一致）。
+# ============================================================================
+
+_ANIMA_CHAR_DDL = """
+CREATE TABLE characters (
+    character TEXT, copyright TEXT, name TEXT, trigger TEXT, core_tags TEXT,
+    count INTEGER, url TEXT, imgname TEXT, thumbname TEXT, search_blob TEXT,
+    image_version INTEGER
+);
+CREATE INDEX idx_char_search ON characters(search_blob);
+"""
+
+
+def _anima_char_app(tmp_path, monkeypatch):
+    """复用 danbooru _app 的 settings/paths 配置，再叠加 anima characters.db。"""
+    app = _app(tmp_path, monkeypatch)
+    anima_db_path = tmp_path / "cf/anima_characters.db"
+    monkeypatch.setattr("backend.characterfinder.paths.ANIMA_CHARACTERS_DB", anima_db_path)
+    c = sqlite3.connect(anima_db_path)
+    c.executescript(_ANIMA_CHAR_DDL)
+    c.execute(
+        "INSERT INTO characters(character,copyright,name,trigger,core_tags,count,url,imgname,thumbname,search_blob) VALUES(?,?,?,?,?,?,?,?,?,?)",
+        (
+            "2b_(nier_automata)",
+            "nier_automata",
+            "2B (Nier Automata)",
+            "2b (nier automata), nier automata",
+            "1girl, blindfold",
+            500,
+            "https://example.com/2b",
+            "2b (nier automata), nier automata.png",
+            "2b (nier automata), nier automata.webp",
+            "2b nier_automata",
+        ),
+    )
+    c.commit(); c.close()
+    deps.get_anima_character_db.cache_clear()
+    return app
+
+
+def test_anima_character_search_end_to_end(tmp_path, monkeypatch):
+    # M4：anima 角色搜索端到端（HTTP 层）—entry_key 前缀 char:anima:、items 非空。
+    client = TestClient(_anima_char_app(tmp_path, monkeypatch))
+    r = client.get("/api/cf/characters", params={"query": "2b", "source": "anima"})
+    assert r.status_code == 200
+    d = r.json()
+    assert d["total"] >= 1
+    assert len(d["items"]) >= 1
+    it = d["items"][0]
+    assert it["entry_key"] == "char:anima:2b_(nier_automata)"
+    assert it["source"] == "anima"
+    assert it["name"] == "2B (Nier Automata)"
+    assert it["series"] == "nier_automata"
+    # 缩略图 url 指向 asset 路由
+    assert "/api/cf/asset" in it["thumb_url"]
+    # anima 搜索可用 copyright 系列过滤
+    r2 = client.get("/api/cf/characters", params={"query": "2b", "source": "anima", "series": "nier_automata"})
+    assert r2.json()["total"] == 1
+
+
+def test_anima_character_detail_locked_tags(tmp_path, monkeypatch):
+    # M6：anima 详情 locked_tags 含 trigger 词。
+    client = TestClient(_anima_char_app(tmp_path, monkeypatch))
+    r = client.get("/api/cf/character", params={"source": "anima", "key": "2b_(nier_automata)"})
+    assert r.status_code == 200
+    d = r.json()
+    assert d["entry_key"] == "char:anima:2b_(nier_automata)"
+    # locked_tags 来自 trigger + core_tags
+    assert "2b (nier automata)" in d["locked_tags"]
+    assert "nier automata" in d["locked_tags"]
+    assert "1girl" in d["locked_tags"]  # core_tags 词
+    assert "blindfold" in d["locked_tags"]
+
+
+def test_anima_character_detail_404_on_missing_key(tmp_path, monkeypatch):
+    # M14：anima char 详情 key 不存在 → 404（与 anima artist 404 对称）。
+    # 建一个空的 anima characters.db：表存在但无任何行，get_by_character 返回 None。
+    app = _app(tmp_path, monkeypatch)
+    anima_db_path = tmp_path / "cf/anima_characters.db"
+    monkeypatch.setattr("backend.characterfinder.paths.ANIMA_CHARACTERS_DB", anima_db_path)
+    c = sqlite3.connect(anima_db_path)
+    c.executescript(_ANIMA_CHAR_DDL)
+    c.commit(); c.close()
+    deps.get_anima_character_db.cache_clear()
+    client = TestClient(app)
+    r = client.get("/api/cf/character", params={"source": "anima", "key": "nonexistent"})
+    assert r.status_code == 404
