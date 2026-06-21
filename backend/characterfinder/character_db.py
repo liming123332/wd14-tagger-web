@@ -34,7 +34,10 @@ logger = logging.getLogger(__name__)
 # Paths
 # ---------------------------------------------------------------------------
 
-_DEFAULT_DB = paths.CHARACTERS_DB
+# NOTE: 不在模块顶层把 paths.CHARACTERS_DB 绑定到默认参数（_DEFAULT_DB = paths.X）。
+# 顶层绑定会在 import 时固化 Path 对象，之后测试用 monkeypatch 改 paths.CHARACTERS_DB
+# 无法影响已绑定的默认值，导致跨测试状态泄漏（Task 8 全量回归红灯）。
+# 改为 __init__ 内惰性读取 paths.CHARACTERS_DB，保证 monkeypatch 随时生效。
 
 
 # ---------------------------------------------------------------------------
@@ -42,8 +45,8 @@ _DEFAULT_DB = paths.CHARACTERS_DB
 # ---------------------------------------------------------------------------
 
 class CharacterDB:
-    def __init__(self, db_path: Path = _DEFAULT_DB):
-        self._path = db_path
+    def __init__(self, db_path: Optional[Path] = None):
+        self._path = db_path if db_path is not None else paths.CHARACTERS_DB
         self._conn: Optional[sqlite3.Connection] = None
         self._write_lock = threading.Lock()
 
