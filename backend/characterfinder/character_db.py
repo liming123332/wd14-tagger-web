@@ -1,0 +1,317 @@
+"""
+character_db.py — SQLite-backed character browser for the Character Finder.
+
+Reads characters.db (populated by sdcf scrape_characters.py).
+No external dependencies — uses stdlib sqlite3 only.
+
+Ported from sd-character-finder/wildcard_creator/character_db.py:
+- _DEFAULT_DB now resolves via backend.characterfinder.paths.CHARACTERS_DB
+- Module-level singleton (get_character_db / atexit hook) removed —
+  DB instances are injected by backend.deps.py (Task 7).
+- New get_by_id() helper returns dict | None (Task 8/9/11 consume dict rows).
+
+Usage:
+    from backend.characterfinder.character_db import CharacterDB
+    db = CharacterDB()
+    results, total = db.search("miku")
+    char = db.get("hatsune miku")
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+import sqlite3
+import threading
+from pathlib import Path
+from typing import Optional
+
+from backend.characterfinder import paths
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+
+_DEFAULT_DB = paths.CHARACTERS_DB
+
+
+# ---------------------------------------------------------------------------
+# CharacterDB
+# ---------------------------------------------------------------------------
+
+class CharacterDB:
+    def __init__(self, db_path: Path = _DEFAULT_DB):
+        self._path = db_path
+        self._conn: Optional[sqlite3.Connection] = None
+        self._write_lock = threading.Lock()
+
+    def _get_conn(self) -> sqlite3.Connection:
+        if self._conn is None:
+            # Prevents 'database disk image is malformed' on git pull updates by discarding orphaned WAL files
+            try:
+                wal = self._path.with_name(self._path.name + "-wal")
+                shm = self._path.with_name(self._path.name + "-shm")
+                if wal.exists(): wal.unlink()
+                if shm.exists(): shm.unlink()
+            except Exception:
+                pass
+
+            self._conn = sqlite3.connect(str(self._path), check_same_thread=False, timeout=15.0)
+            self._conn.row_factory = sqlite3.Row
+            try:
+                self._conn.execute("PRAGMA journal_mode=DELETE")
+                self._conn.execute("PRAGMA busy_timeout=15000")
+                self._conn.execute("PRAGMA synchronous=NORMAL")
+            except sqlite3.OperationalError:
+                pass
+            self._migrate()
+        return self._conn
+
+    def _migrate(self) -> None:
+        """Add new columns to existing DBs without breaking older installs."""
+        with self._write_lock:
+            for ddl in [
+                "ALTER TABLE characters ADD COLUMN danbooru_tag TEXT",
+                "ALTER TABLE characters ADD COLUMN source TEXT DEFAULT 'danbooru'",
+            ]:
+                try:
+                    self._conn.execute(ddl)
+                    self._conn.commit()
+                except sqlite3.OperationalError:
+                    pass  # column already exists
+            # Backfill: existing rows with NULL source -> 'danbooru'
+            self._conn.execute(
+                "UPDATE characters SET source = 'danbooru' WHERE source IS NULL"
+            )
+            self._conn.commit()
+        self.apply_overrides()
+
+    def apply_overrides(self):
+        """Re-apply user saved danbooru tags to the base database."""
+        try:
+            import json
+            overrides_path = self._path.parent / "user_overrides.json"
+            if overrides_path.exists():
+                overrides = json.loads(overrides_path.read_text(encoding="utf-8"))
+                if overrides:
+                    with self._write_lock:
+                        for cid, tag in overrides.items():
+                            self._conn.execute("UPDATE characters SET danbooru_tag = ? WHERE id = ?", (tag, int(cid)))
+                        self._conn.commit()
+        except Exception as e:
+            logger.error(f"apply_overrides failed: {e}")
+
+    def is_populated(self) -> bool:
+        """Returns True if the DB file exists and has at least one row."""
+        if not self._path.exists():
+            return False
+        try:
+            row = self._get_conn().execute("SELECT 1 FROM characters LIMIT 1").fetchone()
+            return row is not None
+        except Exception as e:
+            logger.error(f"is_populated failed: {e}", exc_info=True)
+            return False
+
+    def count(self) -> int:
+        try:
+            row = self._get_conn().execute("SELECT COUNT(*) FROM characters").fetchone()
+            return row[0] if row else 0
+        except Exception as e:
+            logger.error(f"count failed: {e}", exc_info=True)
+            return 0
+
+    def count_by_source(self, source: str) -> int:
+        """Count rows for a specific source value (e.g. danbooru/e621)."""
+        try:
+            row = self._get_conn().execute(
+                "SELECT COUNT(*) FROM characters WHERE source = ?",
+                (source,),
+            ).fetchone()
+            return row[0] if row else 0
+        except Exception as e:
+            logger.error(f"count_by_source failed: source={source!r}, error={e}", exc_info=True)
+            return 0
+
+    def search(
+        self,
+        query: str,
+        series_filter: Optional[str] = None,
+        tag_status_filter: str = "All",
+        source_filter: str = "both",
+        favorites_list: Optional[list[int]] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[dict], int]:
+        """
+        Full-text search on name, tags and danbooru_tag.
+        Optionally filter by exact series, tag status, and source (danbooru/e621/both).
+        Returns a tuple of (list of dicts, total match count).
+        Dicts have keys: id, name, series, tags, image_url, rank, danbooru_tag, source.
+        """
+        query = (query or "").strip()
+        normalized_series = (series_filter or "").strip()
+        params: list = []
+        clauses: list[str] = []
+
+        if query:
+            # Split by comma or whitespace for multi-term AND search
+            terms = [t.strip() for t in re.split(r"[,\s]+", query) if t.strip()]
+            for term in terms:
+                like = f"%{term}%"
+                clauses.append("(name LIKE ? OR tags LIKE ? OR danbooru_tag LIKE ?)")
+                params += [like, like, like]
+
+        if normalized_series and normalized_series != "All":
+            clauses.append("series = ? COLLATE NOCASE")
+            params.append(normalized_series)
+
+        if tag_status_filter == "Missing Danbooru Tag":
+            clauses.append("(danbooru_tag IS NULL OR danbooru_tag = '')")
+        elif tag_status_filter == "Has Danbooru Tag":
+            clauses.append("(danbooru_tag IS NOT NULL AND danbooru_tag != '')")
+
+        if source_filter and source_filter not in {"both", "all"}:
+            clauses.append("source = ?")
+            params.append(source_filter)
+
+        if favorites_list is not None:
+            if not favorites_list:
+                return [], 0
+            placeholders = ",".join("?" * len(favorites_list))
+            clauses.append(f"id IN ({placeholders})")
+            params.extend(favorites_list)
+
+        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+
+        sql_count = f"SELECT COUNT(*) FROM characters {where}"
+
+        sql = f"""
+            SELECT id, name, series, tags, image_url, rank, danbooru_tag, source
+            FROM characters
+            {where}
+            ORDER BY rank ASC
+            LIMIT ? OFFSET ?
+        """
+
+        count_params = list(params)
+        params.extend([limit, offset])
+
+        try:
+            total_count = self._get_conn().execute(sql_count, count_params).fetchone()[0]
+            rows = self._get_conn().execute(sql, params).fetchall()
+            return [dict(r) for r in rows], total_count
+        except Exception as e:
+            logger.error(f"search failed: query={query!r}, series={series_filter!r}, tag_status={tag_status_filter!r}, error={e}", exc_info=True)
+            return [], 0
+
+    def get(self, name: str) -> Optional[dict]:
+        """Exact lookup by character name (case-insensitive)."""
+        try:
+            row = self._get_conn().execute(
+                "SELECT id, name, series, tags, image_url, rank, danbooru_tag "
+                "FROM characters WHERE name = ? COLLATE NOCASE LIMIT 1",
+                (name,),
+            ).fetchone()
+            return dict(row) if row else None
+        except Exception as e:
+            logger.error(f"get failed: name={name!r}, error={e}", exc_info=True)
+            return None
+
+    def get_by_id(self, char_id: int) -> Optional[dict]:
+        """Lookup by primary key. Returns dict | None (Task 8/9/11 contract)."""
+        try:
+            row = self._get_conn().execute(
+                "SELECT id, name, series, tags, image_url, rank, danbooru_tag, source "
+                "FROM characters WHERE id = ? LIMIT 1",
+                (char_id,),
+            ).fetchone()
+            return dict(row) if row else None
+        except Exception as e:
+            logger.error(f"get_by_id failed: char_id={char_id!r}, error={e}", exc_info=True)
+            return None
+
+    def save_danbooru_tag(self, char_id: int, danbooru_tag: str) -> bool:
+        """Persist the canonical Danbooru tag for a character (used by resolve script)."""
+        try:
+            with self._write_lock:
+                self._get_conn().execute(
+                    "UPDATE characters SET danbooru_tag = ? WHERE id = ?",
+                    (danbooru_tag, char_id),
+                )
+                self._get_conn().commit()
+            return True
+        except Exception as e:
+            logger.error(f"save_danbooru_tag failed: char_id={char_id}, tag={danbooru_tag!r}, error={e}", exc_info=True)
+            return False
+
+    def list_pending_danbooru(self, limit: int = 500) -> list[dict]:
+        """List characters where danbooru_tag is still empty."""
+        try:
+            rows = self._get_conn().execute(
+                "SELECT id, name, series FROM characters "
+                "WHERE danbooru_tag IS NULL OR danbooru_tag = '' "
+                "ORDER BY id ASC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            return [dict(r) for r in rows]
+        except Exception as e:
+            logger.error(f"list_pending_danbooru failed: limit={limit}, error={e}", exc_info=True)
+            return []
+
+    def pending_danbooru_count(self) -> int:
+        """Count characters where danbooru_tag is still empty."""
+        try:
+            row = self._get_conn().execute(
+                "SELECT COUNT(*) FROM characters WHERE danbooru_tag IS NULL OR danbooru_tag = ''"
+            ).fetchone()
+            return row[0] if row else 0
+        except Exception as e:
+            logger.error(f"pending_danbooru_count failed: error={e}", exc_info=True)
+            return 0
+
+    def list_series(self) -> list[tuple[str, int]]:
+        """Returns list of (series, count) sorted by series name alphabetically."""
+        try:
+            rows = self._get_conn().execute(
+                "SELECT series, COUNT(*) as cnt FROM characters "
+                "WHERE series IS NOT NULL AND series != '' "
+                "GROUP BY series "
+                "ORDER BY series COLLATE NOCASE ASC"
+            ).fetchall()
+            return [(r[0], r[1]) for r in rows]
+        except Exception as e:
+            logger.error(f"list_series failed: error={e}", exc_info=True)
+            return []
+
+    def count_unique(self) -> int:
+        """Count distinct canonical character entities across all sources.
+
+        Deduplication uses the first whitespace-normalized tag/token from each
+        row (danbooru_tag > tags > name) so overlapping Danbooru/e621/Anima
+        entries count as one.
+        """
+        try:
+            rows = self._get_conn().execute(
+                "SELECT COALESCE(NULLIF(danbooru_tag, ''), NULLIF(tags, ''), name) AS token FROM characters"
+            ).fetchall()
+            seen: set[str] = set()
+            for (token,) in rows:
+                if not token:
+                    continue
+                first = token.split(",")[0].strip().lower()
+                first = first.replace("_", " ")
+                first = first.replace("\\(", "(").replace("\\)", ")")
+                first = re.sub(r"\s+", " ", first)
+                if first:
+                    seen.add(first)
+            return len(seen)
+        except Exception as e:
+            logger.error(f"count_unique failed: error={e}", exc_info=True)
+            return 0
+
+    def close(self) -> None:
+        if self._conn:
+            self._conn.close()
+            self._conn = None
