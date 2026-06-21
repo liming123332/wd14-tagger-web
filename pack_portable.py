@@ -263,7 +263,9 @@ def write_launchers() -> None:
         "echo.\r\n"
         "echo 服务已停止。\r\n"
         "pause\r\n",
-        encoding="utf-8",
+        encoding="utf-8", newline="",  # newline=""：禁用 Windows text mode 的 \n→\r\n 转换，
+        # 否则我写的 \r\n 会被转成 \r\r\n（CR CR LF）。bat 必须 CRLF（LF-only 会让 cmd 行边界
+        # 错乱、中文行被当命令执行）；newline="" 让 \r\n 原样落盘为标准 CRLF，跨平台一致。
     )
     log(f"写入 {start_bat.name}")
 
@@ -325,7 +327,7 @@ def write_launchers() -> None:
         '"%~dp0runtime\\python.exe" "%~dp0wd14-tagger-web\\scripts\\update_anima.py" %*\r\n'
         "echo.\r\n"
         "pause\r\n",
-        encoding="utf-8",
+        encoding="utf-8", newline="",  # 同 start_bat：bat 必须 CRLF，禁用 text mode 双重转换
     )
     log(f"写入 {anima_bat.name}")
 
