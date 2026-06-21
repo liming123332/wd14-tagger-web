@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildPrompt, parsePhrase } from '../detail-utils'
+import { buildPrompt, parsePhrase, buildPromptWithLocked } from '../detail-utils'
 
 describe('buildPrompt', () => {
   it('按固定顺序拼接 6 类标签', () => {
@@ -36,5 +36,27 @@ describe('parsePhrase', () => {
   })
   it('空串返回空', () => {
     expect(parsePhrase('')).toEqual([])
+  })
+})
+
+describe('buildPromptWithLocked', () => {
+  const meta = { categories: {
+    quality: { tags: ['masterpiece'] }, head: { tags: ['long hair'] },
+    clothing: { tags: ['dress'] }, view: { tags: [] }, action: { tags: [] }, scene: { tags: [] },
+  } }
+
+  it('锁定标签前置在 6 类 prompt 之前', () => {
+    expect(buildPromptWithLocked(meta, ['miku', 'vocaloid']))
+      .toBe('miku, vocaloid, masterpiece, long hair, dress')
+  })
+  it('不传 lockedTags 时等价于 buildPrompt', () => {
+    expect(buildPromptWithLocked(meta)).toBe('masterpiece, long hair, dress')
+  })
+  it('空 lockedTags 数组等价于不传', () => {
+    expect(buildPromptWithLocked(meta, [])).toBe('masterpiece, long hair, dress')
+  })
+  it('过滤 lockedTags 内的空串', () => {
+    expect(buildPromptWithLocked(meta, ['miku', '']))
+      .toBe('miku, masterpiece, long hair, dress')
   })
 })

@@ -14,3 +14,11 @@ export function parsePhrase(phrase: string): string[] {
   if (!s.includes(',')) return [s]
   return s.split(',').map(p => p.trim()).filter(Boolean)
 }
+
+// 角色/艺术家详情页用：权威 locked_tags（trigger+core_tags / 画师 tag）始终前置、不可移除。
+// 锁定标签来自后端只读数据，覆盖层编辑绝不触碰；拼接时去空串。
+export function buildPromptWithLocked(meta: any, lockedTags: string[] = []): string {
+  const head = (lockedTags || []).filter(Boolean).join(', ')
+  const base = buildPrompt(meta)
+  return [head, base].filter(Boolean).join(', ')
+}
