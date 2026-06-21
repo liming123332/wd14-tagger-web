@@ -55,6 +55,8 @@ def create_app() -> FastAPI:
     app.include_router(routes_pathtag.router)
     from backend.api import routes_cfassets
     app.include_router(routes_cfassets.router)
+    from backend.api import routes_characters
+    app.include_router(routes_characters.router)
     # 生产：托管前端构建产物（mount "/" 必须在所有 /api 路由 include 之后，避免拦截 API）
     dist = settings.ROOT / "frontend" / "dist"
     if dist.exists():

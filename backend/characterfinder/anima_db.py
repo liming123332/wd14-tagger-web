@@ -8,8 +8,10 @@ cover images on-demand from https://blobs.animadex.net and caches them locally.
 No external dependencies — uses stdlib sqlite3 only.
 
 Ported from sd-character-finder/wildcard_creator/anima_db.py:
-- Default DB paths now resolve via backend.characterfinder.paths
-  (ANIMA_CHARACTERS_DB / ANIMA_ARTISTS_DB).
+- Default DB paths resolve lazily inside __init__ via backend.characterfinder.paths
+  (ANIMA_CHARACTERS_DB / ANIMA_ARTISTS_DB), so monkeypatching paths.X takes
+  effect at construction time (see _DEFAULT_* NOTE below; mirrors Task 8 fix
+  in character_db.py / artist_db.py).
 - Module-level singletons removed (_anima_character_db / _anima_artist_db /
   get_anima_character_db / get_anima_artist_db / _get_db_path) — DB instances
   are injected by backend.deps.py (Task 7).
@@ -29,7 +31,7 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from backend.characterfinder import paths
 
@@ -39,8 +41,11 @@ _CHAR_IMG_PREFIX = "Outputs"
 _ARTIST_THUMB_PREFIX = "ArtistOutputs/thumbs"
 _ARTIST_IMG_PREFIX = "ArtistOutputs"
 
-_DEFAULT_CHAR_DB = paths.ANIMA_CHARACTERS_DB
-_DEFAULT_ARTIST_DB = paths.ANIMA_ARTISTS_DB
+# NOTE: 不在模块顶层把 paths.ANIMA_CHARACTERS_DB / ANIMA_ARTISTS_DB 绑定到默认参数
+# （_DEFAULT_*_DB = paths.X）。顶层绑定会在 import 时固化 Path 对象，之后测试用
+# monkeypatch 改 paths.ANIMA_CHARACTERS_DB 无法影响已绑定的默认值，导致跨测试状态泄漏
+# （与 Task 8 修过的 character_db.py / artist_db.py 同源缺陷，此处一并修复）。
+# 改为 __init__ 内惰性读取 paths.X，保证 monkeypatch 随时生效。
 
 
 def _r2_quote(name: str) -> str:
@@ -72,8 +77,8 @@ def artist_image_url(imgname: str) -> str:
 
 
 class AnimaCharacterDB:
-    def __init__(self, path: Path = _DEFAULT_CHAR_DB):
-        self.path = path
+    def __init__(self, path: Optional[Path] = None):
+        self.path = path if path is not None else paths.ANIMA_CHARACTERS_DB
         self._ensure_exists()
 
     def _ensure_exists(self):
@@ -156,8 +161,8 @@ class AnimaCharacterDB:
 
 
 class AnimaArtistDB:
-    def __init__(self, path: Path = _DEFAULT_ARTIST_DB):
-        self.path = path
+    def __init__(self, path: Optional[Path] = None):
+        self.path = path if path is not None else paths.ANIMA_ARTISTS_DB
         self._ensure_exists()
 
     def _ensure_exists(self):
