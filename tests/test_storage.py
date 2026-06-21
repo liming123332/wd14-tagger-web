@@ -207,3 +207,40 @@ def test_list_images_prompt_combines_with_tags(tmp_path):
     # prompt=long hair 且 tags=fav：仅 0001
     r = s.list_images(prompt=["long hair"], tags=["fav"])
     assert [i["id"] for i in r["items"]] == ["20260619-100000-0001"]
+
+
+def test_list_images_no_filter_skips_full_scan(tmp_path, monkeypatch):
+    # 无过滤翻页：过滤阶段不读 meta，只 items 构造读 size 张（旧实现会读全部 N 张）
+    s = Storage(tmp_path)
+    for i in range(20):
+        _write_meta_directly(tmp_path, f"20260619-1000{i:02d}-{i:04x}")
+    calls = {"n": 0}
+    orig = s.get_meta
+
+    def counting(mid):
+        calls["n"] += 1
+        return orig(mid)
+
+    monkeypatch.setattr(s, "get_meta", counting)
+    res = s.list_images(page=1, size=5)
+    assert res["total"] == 20
+    assert len(res["items"]) == 5
+    assert calls["n"] == 5  # 只读切片的 5 张，不扫全 20 张
+
+
+def test_prompt_substring_skips_full_scan(tmp_path, monkeypatch):
+    # 子串兜底走词表（cat_inv.keys()），不读图文件；只 items 构造读 size 张
+    s = Storage(tmp_path)
+    for i in range(20):
+        _write_meta_directly(tmp_path, f"20260619-1000{i:02d}-{i:04x}", tags=[f"tag {i}"])
+    calls = {"n": 0}
+    orig = s.get_meta
+
+    def counting(mid):
+        calls["n"] += 1
+        return orig(mid)
+
+    monkeypatch.setattr(s, "get_meta", counting)
+    res = s.list_images(prompt=["tag"], size=5)  # "tag" 子串命中全部 20 张
+    assert res["total"] == 20
+    assert calls["n"] == 5  # 过滤走词表不读盘，只读切片 5 张
