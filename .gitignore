@@ -12,3 +12,7 @@ data/
 
 # pack_portable 下载缓存（重建时复用 CUDA wheel，省 600MB 重下，不入 git）
 _dl/
+
+# patches 里给朋友的修复补丁随附 wheel（大体积二进制，单独发给用户，不入 git；
+# 补丁的 .bat/.txt 说明文件仍入库，用户按说明自行下载 wheel 放到补丁目录）
+patches/**/*.whl
