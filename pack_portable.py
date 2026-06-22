@@ -43,8 +43,11 @@ SRC_ROOT = Path(__file__).resolve().parent
 PKG_ROOT = SRC_ROOT.parent / "WD14-Tagger-Web-Portable"
 
 # 拷源码时排除的目录/文件
-EXCLUDE_DIRS = {".venv", "node_modules", "__pycache__", ".git",
-                ".pytest_cache", ".vscode"}  # 注意：frontend/dist 必须保留（后端托管）
+# .git 不排除：随源码拷进整合包（仅 2.9M），让整合包支持 git 更新（「更新源码.bat」reset --hard origin/master）。
+# 注意：frontend/dist 必须保留（后端托管，且已纳入 git 随更新同步）。
+# _dl 排除：pack_portable 的 wheel 下载缓存（~800M CUDA wheel），依赖已装进 runtime，不进整合包。
+EXCLUDE_DIRS = {".venv", "node_modules", "__pycache__",
+                ".pytest_cache", ".vscode", "_dl"}
 EXCLUDE_FILE_SUFFIXES = (".pyc", ".pyo")
 
 
@@ -179,7 +182,7 @@ def copy_source() -> None:
     dest = PKG_ROOT / "wd14-tagger-web"
     if dest.exists():
         shutil.rmtree(dest)
-    log(f"拷贝源码 {SRC_ROOT} -> {dest}（排除 .venv/node_modules/.git 等）")
+    log(f"拷贝源码 {SRC_ROOT} -> {dest}（排除 .venv/node_modules/_dl 等；.git 随源码进包，支持整合包 git 更新）")
     shutil.copytree(SRC_ROOT, dest, ignore=_ignore_when_copy)
 
     # 确保前端已构建；若源里 frontend/dist 缺失，提示（不自动 npm build，避免依赖 node）
@@ -308,14 +311,19 @@ def write_launchers() -> None:
         "============\n\n"
         "本包采用「整合包」结构：\n"
         "- runtime\\        便携 Python + 依赖，升级时【不要动】\n"
-        "- wd14-tagger-web\\ 程序源码，【升级时只替换这个目录】\n"
+        "- wd14-tagger-web\\ 程序源码（已纳入 git，支持在线更新）\n"
         "- models\\          你的模型，【不要动】\n"
         "- data\\            你的图片/提示词数据，【不要动】\n\n"
-        "升级方法（二选一）：\n"
-        "方法 A（推荐）：我把更新后的整个新包发给你，解压后把旧的 models\\ 和 data\\\n"
+        "升级方法（三选一）：\n"
+        "方法 A（推荐）：双击「更新源码.bat」自动从 github 拉最新源码与前端。\n"
+        "              前提：电脑装了 Git for Windows（https://git-scm.com/download/win），\n"
+        "              且能访问 github.com（国内可能需配 git 代理）。\n"
+        "              只更新源码与前端 dist，models\\ 与 data\\ 用户数据不受影响。\n"
+        "              更新后重启后端（关闭启动窗口，重新双击 启动.bat）。\n"
+        "方法 B：我把更新后的整个新包发给你，解压后把旧的 models\\ 和 data\\\n"
         "              拷到新包的 wd14-tagger-web\\ 下覆盖即可。\n"
-        "方法 B：我只发你一个 wd14-tagger-web 源码压缩包，解压后整个覆盖本包的\n"
-        "       wd14-tagger-web\\ 文件夹（models/data 不在里面，不受影响）。\n",
+        "方法 C：我只发你一个 wd14-tagger-web 源码压缩包，解压后整个覆盖本包的\n"
+        "              wd14-tagger-web\\ 文件夹（models/data 不在里面，不受影响）。\n",
         encoding="utf-8",
     )
     log(f"写入 {update_note.name}")
@@ -354,6 +362,36 @@ def write_launchers() -> None:
         encoding="utf-8", newline="",  # 同 start_bat：bat 必须 CRLF，禁用 text mode 双重转换
     )
     log(f"写入 {anima_bat.name}")
+
+    # 更新源码.bat：用系统 git 从 origin 拉最新源码，强制同步（reset --hard origin/master）。
+    # 依赖系统装了 Git for Windows（用户决策：不自带 MinGit，仅检测）。models/data 被
+    # gitignore，reset --hard 不动 untracked 文件，用户数据安全；frontend/dist 已纳入
+    # git 随更新同步。国内访问 github 可能需先 git config http.proxy。
+    update_src_bat = PKG_ROOT / "更新源码.bat"
+    update_src_bat.write_text(
+        "@echo off\r\n"
+        "chcp 65001 >nul\r\n"
+        'cd /d "%~dp0wd14-tagger-web"\r\n'
+        "where git >nul 2>nul\r\n"
+        "if errorlevel 1 (\r\n"
+        "    echo [错误] 未检测到 git，请先安装 Git for Windows:\r\n"
+        "    echo   https://git-scm.com/download/win\r\n"
+        "    pause & exit /b 1\r\n"
+        ")\r\n"
+        "echo 拉取最新源码（需能访问 github.com，国内可能需配 git 代理）...\r\n"
+        "git fetch origin\r\n"
+        "if errorlevel 1 (\r\n"
+        "    echo [失败] 无法连接远程，请检查网络或代理。\r\n"
+        "    pause & exit /b 1\r\n"
+        ")\r\n"
+        "git reset --hard origin/master\r\n"
+        "echo.\r\n"
+        "echo 更新完成。models\\ 与 data\\ 用户数据不受影响。\r\n"
+        "echo 请重启后端（关闭启动窗口，重新双击 启动.bat）。\r\n"
+        "pause\r\n",
+        encoding="utf-8", newline="",  # 同 start_bat：bat 必须 CRLF，禁用 text mode 双重转换
+    )
+    log(f"写入 {update_src_bat.name}")
 
 
 def fetch_vcredist() -> None:
