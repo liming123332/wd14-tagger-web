@@ -43,9 +43,12 @@ function onDrop(e: DragEvent) {
   if (!props.modelValue.tags.includes(tag)) patch({ tags: [...props.modelValue.tags, tag], user_edited: true })
 }
 
-// 短句模式：复制该分类当前的 phrase 文本
-async function copyPhrase() {
-  try { await navigator.clipboard.writeText(props.modelValue.phrase || ''); msg.success('已复制当前提示词') }
+// 复制该分类当前提示词：tags 模式取标签逗号拼接，phrase 模式取短句文本
+async function copyCurrent() {
+  const text = props.mode === 'tags'
+    ? (props.modelValue.tags || []).join(', ')
+    : (props.modelValue.phrase || '')
+  try { await navigator.clipboard.writeText(text); msg.success('已复制当前提示词') }
   catch { msg.error('复制失败') }
 }
 </script>
@@ -71,6 +74,7 @@ async function copyPhrase() {
           <n-button size="small" @click="addTag">+</n-button>
           <n-button v-if="categoryKey && categoryKey !== 'extras'" size="tiny" type="info" ghost
                     @click="$emit('applyRule', modelValue.tags)">应用到分类词表</n-button>
+          <n-button size="tiny" @click="copyCurrent">复制当前提示词</n-button>
         </n-space>
       </template>
       <template v-else>
@@ -81,7 +85,7 @@ async function copyPhrase() {
             <template #trigger><n-button size="tiny" :disabled="!modelValue.user_edited">应用短句到标签</n-button></template>
             将用短句覆盖当前标签？
           </n-popconfirm>
-          <n-button size="tiny" @click="copyPhrase">复制当前提示词</n-button>
+          <n-button size="tiny" @click="copyCurrent">复制当前提示词</n-button>
         </n-space>
       </template>
       <div v-if="dragging" class="drop-hint">拖到此处（复制）</div>

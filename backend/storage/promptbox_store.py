@@ -135,6 +135,29 @@ class PromptboxStore:
                 return it
         raise KeyError(item_id)
 
+    def replace_main_image(self, item_id: str, filename: str, data: bytes) -> PromptboxItem:
+        """替换主图（image_names[0]）：删旧文件 + 存新，更新清单。无图则 append（等同上传）。
+        item_id 不存在抛 KeyError（路由转 404）。"""
+        if self.get(item_id) is None:
+            raise KeyError(item_id)
+        d = self._item_dir(item_id)
+        d.mkdir(parents=True, exist_ok=True)
+        ext = Path(filename).suffix.lower() or ".png"
+        name = f"{secrets.token_hex(8)}{ext}"  # token 文件名：防冲突/穿越（同 save_image）
+        (d / name).write_bytes(data)
+        items = self._read_all()
+        for x in items:
+            if x.id == item_id:
+                if x.image_names:
+                    self.remove_image(item_id, x.image_names[0])  # 删旧主图文件
+                    x.image_names[0] = name
+                else:
+                    x.image_names.append(name)
+                x.updated_at = datetime.now().astimezone().isoformat(timespec="seconds")
+                self._write_all(items)
+                return x
+        raise KeyError(item_id)
+
     def delete(self, item_id: str) -> None:
         items = self._read_all()
         self._write_all([it for it in items if it.id != item_id])

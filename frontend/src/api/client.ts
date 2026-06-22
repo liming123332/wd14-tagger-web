@@ -69,6 +69,15 @@ export async function deleteImage(id: string) {
   return fetch(`${base}/api/images/${id}`, { method: 'DELETE' }).then(r => r.json())
 }
 
+// 图库详情「替换图片」：覆盖原图+缩略图，保留 meta 标签（后端不自动反推）
+export async function replaceImage(id: string, file: File) {
+  const fd = new FormData()
+  fd.append('file', file)
+  const r = await fetch(`${base}/api/images/${id}/replace`, { method: 'POST', body: fd })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
 export async function startBatch(ids: string[], gen_th = 0.35, char_th = 0.9, model = 'wd14') {
   return fetch(`${base}/api/batch/tag`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -133,7 +142,31 @@ export async function listTaggers(): Promise<TaggerInfo[]> {
 }
 
 export async function downloadTagger(key: string): Promise<{ key: string; downloaded: boolean }> {
-  return fetch(`${base}/api/taggers/${key}/download`, { method: 'POST' }).then(r => r.json())
+  const r = await fetch(`${base}/api/taggers/${key}/download`, { method: 'POST' })
+  if (!r.ok) {
+    // 下载失败（如 gated 模型 401/403、网络中断）：把后端 detail 透传给前端提示
+    let detail = ''
+    try { detail = (await r.json()).detail || '' } catch { detail = await r.text() }
+    throw new Error(detail || `HTTP ${r.status}`)
+  }
+  return r.json()
+}
+
+export interface DownloadProgress {
+  active: boolean
+  key: string
+  file: string
+  index: number
+  total_files: number
+  downloaded: number
+  size: number
+  done: boolean
+  error: string
+}
+
+// 当前下载任务进度（前端轮询显示）
+export async function getDownloadProgress(): Promise<DownloadProgress> {
+  return fetch(`${base}/api/taggers/download-progress`).then(r => r.json())
 }
 
 // 卸载所有已加载模型（从内存/显存释放 ONNX session，不删文件；下次反推重新加载）
@@ -189,6 +222,15 @@ export async function updatePromptbox(id: string, fd: FormData): Promise<Promptb
 
 export async function deletePromptbox(id: string) {
   return fetch(`${base}/api/promptbox/${id}`, { method: 'DELETE' }).then(r => r.json())
+}
+
+// 提示词收藏详情「替换主图」：覆盖第一张示例图
+export async function replacePromptboxImage(id: string, file: File): Promise<PromptboxItem> {
+  const fd = new FormData()
+  fd.append('file', file)
+  const r = await fetch(`${base}/api/promptbox/${id}/replace-image`, { method: 'POST', body: fd })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
 }
 
 export function promptboxImageUrl(id: string, name: string) {

@@ -152,6 +152,29 @@ class ArtistDB:
             )
             return [], 0
 
+    def random(self, size: int = 24, source: Optional[str] = None) -> list[dict]:
+        """随机抽取 size 条艺术家（ORDER BY RANDOM()）。source 可选过滤数据源。
+
+        替代 random_cf 里旧的 search("", limit=size) 固定 rank ASC 取前 N——
+        那样「再抽一页」永远同一批画师。SELECT * 与 search/get_by_id 列一致。
+        """
+        conn = self._get_conn()
+        try:
+            if source and source != "all":
+                rows = conn.execute(
+                    "SELECT * FROM artists WHERE source = ? ORDER BY RANDOM() LIMIT ?",
+                    (source, size),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM artists ORDER BY RANDOM() LIMIT ?",
+                    (size,),
+                ).fetchall()
+            return [dict(r) for r in rows]
+        except Exception as e:
+            logger.error(f"random failed: size={size}, source={source!r}, error={e}", exc_info=True)
+            return []
+
     def count(
         self,
         query: str = "",

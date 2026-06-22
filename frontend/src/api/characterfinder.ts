@@ -145,3 +145,24 @@ export async function randomCf(type: 'characters' | 'artists', source: string, s
   const q = new URLSearchParams({ type, source, size: String(size) })
   return fetch(`${base}/api/cf/random?${q}`).then(r => r.json())
 }
+
+// ===== 单张缩略图重拉 + token 配置（anima）=====
+export async function refreshThumb(kind: 'char' | 'artist', source: string, key: string): Promise<{ ok: boolean; bytes: number }> {
+  const q = `kind=${encodeURIComponent(kind)}&source=${encodeURIComponent(source)}&key=${encodeURIComponent(key)}`
+  const r = await fetch(`${base}/api/cf/asset/refresh-thumb?${q}`, { method: 'POST' })
+  if (!r.ok) throw new Error((await r.json()).detail || '拉取失败')
+  return r.json()
+}
+
+export async function getAnimaToken(): Promise<{ configured: boolean; preview: string | null }> {
+  return fetch(`${base}/api/config/anima-token`).then(r => r.json())
+}
+
+export async function setAnimaToken(token: string): Promise<{ configured: boolean; preview: string }> {
+  const r = await fetch(`${base}/api/config/anima-token`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  })
+  if (!r.ok) throw new Error((await r.json()).detail || '保存失败')
+  return r.json()
+}

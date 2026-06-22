@@ -47,25 +47,11 @@ class CLTaggerV2:
         self._load()
 
     def _download(self) -> None:
-        # 逻辑同 OnnxTagger/CLTagger（逐文件 skip 已有、.part 原子写、Content-Length 校验）。
-        # 注：cl_tagger_v2 是 gated 模型，需登录同意条款后手动下载 3 文件放入 model_dir（程序无法自动下载 gated 模型）。
-        self.model_dir.mkdir(parents=True, exist_ok=True)
-        for name, url in self.spec.files.items():
-            dst = self.model_dir / name
-            if dst.exists():
-                continue
-            tmp = dst.with_suffix(dst.suffix + ".part")
-            try:
-                with urllib.request.urlopen(url) as resp:
-                    expected = resp.headers.get("Content-Length")
-                    with tmp.open("wb") as f:
-                        shutil.copyfileobj(resp, f)
-                if expected is not None and str(tmp.stat().st_size) != expected:
-                    raise IOError(f"{name} 下载不完整：期望 {expected}，实际 {tmp.stat().st_size}")
-                tmp.replace(dst)
-            except BaseException:
-                tmp.unlink(missing_ok=True)
-                raise
+        # 逐文件下载 + 进度，逻辑集中在 _download_util.download_files（三类 tagger 共用）。
+        # 注：cl_tagger_v2 是 gated 模型，需登录同意条款后手动下载 3 文件放入 model_dir
+        # （程序无法自动下载 gated 模型；点下载会失败，并在控制台/页面提示 401/403 原因）。
+        from backend.tagger._download_util import download_files
+        download_files(self.spec, self.model_dir, self.spec.key)
 
     def _load(self) -> None:
         from onnxruntime import InferenceSession

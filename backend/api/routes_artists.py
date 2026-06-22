@@ -3,6 +3,7 @@ from fastapi import APIRouter, Query, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from PIL import Image, UnidentifiedImageError
 import secrets
+from urllib.parse import quote
 
 # 裁决 B：brief 原文 import 块遗漏了 get_cf_recent，但 get_artist 内调用
 # get_cf_recent().add(ek)，缺 import 会 NameError。此处补齐。
@@ -17,7 +18,8 @@ router = APIRouter(prefix="/api/cf", tags=["cf-artists"])
 
 
 def _asset(kind, source, key, which):
-    return f"/api/cf/asset?kind={kind}&source={source}&key={key}&which={which}"
+    # key 可能含 & # =（组合画师），必须 URL 编码，否则截断查询字符串
+    return f"/api/cf/asset?kind={kind}&source={source}&key={quote(key, safe='')}&which={which}"
 
 
 def _split(text):

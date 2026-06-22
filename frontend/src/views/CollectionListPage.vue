@@ -43,6 +43,18 @@ async function doDelete(id: string) {
   catch (e: any) { msg.error('删除失败：' + e.message) }
 }
 
+// 完整 prompt = 6 类 + extras 逗号拼接（用当前 categories/extras，非 raw_prompt，
+// 详情页改分类后 raw_prompt 可能未同步）。与各详情页 fullPrompt 口径一致。
+function fullPrompt(it: PromptboxItem): string {
+  return [...ORDER.map(k => it.categories[k] || []).flat(), ...it.extras].filter(Boolean).join(', ')
+}
+async function copyPrompt(it: PromptboxItem) {
+  const p = fullPrompt(it)
+  if (!p) { msg.warning('暂无提示词'); return }
+  try { await navigator.clipboard.writeText(p); msg.success('已复制完整 prompt') }
+  catch { msg.error('复制失败') }
+}
+
 function goPromptbox() { router.push('/promptbox') }
 function goDetail(id: string) { router.push(`/collections/${id}`) }
 </script>
@@ -74,10 +86,13 @@ function goDetail(id: string) { router.push(`/collections/${id}`) }
           </n-tag>
         </div>
         <template #action>
-          <n-popconfirm @positive-click="doDelete(it.id)">
-            <template #trigger><n-button size="tiny" type="error" @click.stop>删除</n-button></template>
-            确认删除？
-          </n-popconfirm>
+          <n-space :wrap="false">
+            <n-button size="tiny" @click.stop="copyPrompt(it)">复制完整 prompt</n-button>
+            <n-popconfirm @positive-click="doDelete(it.id)">
+              <template #trigger><n-button size="tiny" type="error" @click.stop>删除</n-button></template>
+              确认删除？
+            </n-popconfirm>
+          </n-space>
         </template>
       </n-card>
     </n-grid-item>

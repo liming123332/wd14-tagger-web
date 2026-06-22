@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
-"""整合包内置：从本机 animadex-data 同步 anima 角色/艺术家数据。
+"""整合包内置：从 source animadex.db 重建整合包的 anima 角色/艺术家库。
 
-前置：先用 AnimaDex\\import.bat 把最新数据拉到 animadex-data/（支持增量 delta）。
-本脚本从 animadex-data/animadex.db 重建整合包的 anima DB，刷新主库的 anima 行，
-并增量拷贝 webp 缩略图。全部幂等，可重复运行。
+默认 source = 整合包内 data/characterfinder/_anima_source/（由 fetch_anima.py
+从 animadex.net 拉取产生）；也支持 --animadex-data 指向外部 AnimaDex 程序的
+animadex-data/（向后兼容）。
+
+重建 anima_characters.db/anima_artists.db，刷新主库 characters.db/artists.db
+的 source='anima' 行（danbooru/e621 不动），增量拷贝 webp 缩略图。幂等可重复。
 
 不会动你的：cf_overlay.db（收藏/编辑）、data/images（上传图）、models、runtime。
 
-用法（在整合包根目录）：
+用法（通常由 更新anima数据.bat 在 fetch_anima.py 之后自动调用）：
     runtime\\python.exe wd14-tagger-web\\scripts\\update_anima.py
     python update_anima.py --animadex-data D:\\path\\to\\animadex-data
-    python update_anima.py --prune          # 顺带清理 animadex 已删角色的残留收藏
-
-找不到 animadex-data 时，设环境变量 ANIMADEX_DATA 指向它。
+    python update_anima.py --prune          # 顺带清理已删角色的残留收藏
 """
 from __future__ import annotations
 
@@ -67,6 +68,7 @@ def find_animadex_data(override: str | None) -> Path | None:
         checks.append(Path(env))
     # 相对整合包根反推（适配不同安装位置）+ 本机常见绝对路径兜底
     checks.extend([
+        CF_DIR / "_anima_source",              # 整合包内置 fetch_anima.py 产物（默认首选）
         PKG_ROOT.parent / "animadex-data",                    # trae 下整合包：../animadex-data
         PKG_ROOT.parent / "trae" / "wd14" / "animadex-data",  # I 盘根整合包
         PKG_ROOT.parent / "wd14" / "animadex-data",

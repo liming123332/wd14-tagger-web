@@ -42,25 +42,10 @@ class OnnxTagger:
         self._load()
 
     def _download(self) -> None:
-        self.model_dir.mkdir(parents=True, exist_ok=True)
-        for name, url in self.spec.files.items():
-            dst = self.model_dir / name
-            if dst.exists():
-                continue
-            tmp = dst.with_suffix(dst.suffix + ".part")
-            try:
-                with urllib.request.urlopen(url) as resp:
-                    expected = resp.headers.get("Content-Length")
-                    with tmp.open("wb") as f:
-                        shutil.copyfileobj(resp, f)
-                if expected is not None and str(tmp.stat().st_size) != expected:
-                    raise IOError(
-                        f"{name} 下载不完整：期望 {expected} 字节，实际 {tmp.stat().st_size}"
-                    )
-                tmp.replace(dst)
-            except BaseException:
-                tmp.unlink(missing_ok=True)
-                raise
+        # 逐文件下载（skip 已有 / .part 原子写 / Content-Length 校验）+ 控制台进度 + 全局状态，
+        # 逻辑集中在 _download_util.download_files，三类 tagger 共用。
+        from backend.tagger._download_util import download_files
+        download_files(self.spec, self.model_dir, self.spec.key)
 
     def _load(self) -> None:
         from onnxruntime import InferenceSession

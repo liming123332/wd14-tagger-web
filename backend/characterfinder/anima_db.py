@@ -142,6 +142,18 @@ class AnimaCharacterDB:
             rows = conn.execute(sql, params).fetchall()
             return [dict(r) for r in rows], total
 
+    def random(self, size: int = 24) -> list[dict[str, Any]]:
+        """随机抽取 size 条角色（ORDER BY RANDOM()），用于随机抽取页。
+
+        替代 random_cf 旧的 search("", limit=size) 固定 ORDER BY count DESC 取前 N
+        ——那样「再抽一页」永远同一批。
+        """
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM characters ORDER BY RANDOM() LIMIT ?", (size,)
+            ).fetchall()
+            return [dict(r) for r in rows]
+
     def get_by_character(self, character: str) -> dict[str, Any] | None:
         with self._connect() as conn:
             row = conn.execute(
@@ -221,6 +233,18 @@ class AnimaArtistDB:
                 params = [limit, offset]
             rows = conn.execute(sql, params).fetchall()
             return [dict(r) for r in rows], total
+
+    def random(self, size: int = 24) -> list[dict[str, Any]]:
+        """随机抽取 size 条艺术家（ORDER BY RANDOM()），用于随机抽取页。
+
+        替代 random_cf 旧的 search("", limit=size) 固定 ORDER BY count DESC 取前 N
+        ——那样「再抽一页」永远同一批画师。
+        """
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM artists ORDER BY RANDOM() LIMIT ?", (size,)
+            ).fetchall()
+            return [dict(r) for r in rows]
 
     def get_by_artist(self, artist: str) -> dict[str, Any] | None:
         with self._connect() as conn:

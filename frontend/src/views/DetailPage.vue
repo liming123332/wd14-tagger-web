@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NSpace, NButton, NRadioGroup, NRadioButton, NImage, NCard, NInputNumber, NInput, NDynamicTags, useMessage, NPopconfirm, NSelect, NTag } from 'naive-ui'
+import { NSpace, NButton, NRadioGroup, NRadioButton, NImage, NCard, NInputNumber, NInput, NDynamicTags, useMessage, NPopconfirm, NSelect, NTag, NUpload } from 'naive-ui'
 import TagEditor from '../components/TagEditor.vue'
-import { getMeta, saveMeta, tagImage, reclassify, deleteImage, fileUrl, applyCategoryRules } from '../api/client'
+import { getMeta, saveMeta, tagImage, reclassify, deleteImage, fileUrl, applyCategoryRules, replaceImage } from '../api/client'
 import { useTagger } from '../composables/useTagger'
 import { buildPrompt } from '../detail-utils'
 
@@ -112,6 +112,21 @@ async function del() {
   await deleteImage(id.value); msg.success('已删除'); router.push('/gallery')
 }
 
+// 缩略图文件名固定 thumb.webp，换图后内容变需 cache-buster 强制 n-image 重载
+const imgVersion = ref(0)
+async function replaceImg(file: File) {
+  try {
+    await replaceImage(id.value, file)
+    meta.value = await getMeta(id.value)
+    imgVersion.value++
+    msg.success('图片已替换（标签保留，可手动重新反推）')
+  } catch (e: any) { msg.error('替换失败：' + e.message) }
+}
+function onUploadReqReplace({ file }: any) {
+  const f = (file as any)?.file as File | undefined
+  if (f) replaceImg(f)
+}
+
 const fullPrompt = computed(() => meta.value ? buildPrompt(meta.value) : '')
 async function copyPrompt() {
   try { await navigator.clipboard.writeText(fullPrompt.value); msg.success('已复制完整 prompt') }
@@ -124,7 +139,7 @@ async function copyPrompt() {
     <div>
       <n-card>
         <div class="img-wrap">
-          <n-image :src="fileUrl(id, meta.image.thumb)" :preview-src="fileUrl(id, meta.image.original)" object-fit="contain" style="max-height:420px;width:100%;display:block" />
+          <n-image :src="fileUrl(id, meta.image.thumb) + (imgVersion ? '?_v=' + imgVersion : '')" :preview-src="fileUrl(id, meta.image.original) + (imgVersion ? '?_v=' + imgVersion : '')" object-fit="contain" style="max-height:420px;width:100%;display:block" />
         </div>
         <div style="font-size:12px;margin-top:8px">
           <div style="margin-bottom:4px">
@@ -154,6 +169,9 @@ async function copyPrompt() {
           </div>
         </div>
         <n-space vertical style="margin-top:8px">
+          <n-upload :show-file-list="false" :max="1" accept="image/*" :custom-request="onUploadReqReplace">
+            <n-button size="small">替换图片</n-button>
+          </n-upload>
           <n-button size="small" @click="reTag">重新反推</n-button>
           <n-button size="small" @click="reClassify">重分类</n-button>
           <n-popconfirm @positive-click="del"><template #trigger><n-button size="small" type="error">删除</n-button></template>确认删除？</n-popconfirm>

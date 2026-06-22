@@ -4,6 +4,7 @@ from pydantic import BaseModel
 
 from backend.config import settings
 from backend.deps import get_classifier
+from backend.characterfinder import paths
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
@@ -58,3 +59,38 @@ def put_quality(payload: QualityPayload):
 @router.get("/quality")
 def get_quality():
     return yaml.safe_load(settings.QUALITY_TEMPLATE_PATH.read_text(encoding="utf-8"))
+
+
+# ===== Anima 数据更新 token（设置页配置，fetch_anima.py 读取）=====
+def _mask_token(t: str) -> str:
+    """token 掩码预览：前2 + *** + 后3（过短则全掩）。绝不返回明文。"""
+    return (t[:2] + "***" + t[-3:]) if len(t) > 6 else "***"
+
+
+class AnimaTokenPayload(BaseModel):
+    token: str
+
+
+@router.get("/anima-token")
+def get_anima_token():
+    """animadex export token 配置状态。token 文件 = paths.ANIMA_TOKEN_PATH
+    （fetch_anima.py 读取的 .token），设置页写入。"""
+    p = paths.ANIMA_TOKEN_PATH
+    if not p.exists():
+        return {"configured": False, "preview": None}
+    t = p.read_text(encoding="utf-8").strip()
+    if not t:
+        return {"configured": False, "preview": None}
+    return {"configured": True, "preview": _mask_token(t)}
+
+
+@router.post("/anima-token")
+def set_anima_token(payload: AnimaTokenPayload):
+    """保存 animadex export token 到本地 .token（fetch_anima.py 读取，不外传）。"""
+    token = (payload.token or "").strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="token 不能为空")
+    p = paths.ANIMA_TOKEN_PATH
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(token, encoding="utf-8")
+    return {"configured": True, "preview": _mask_token(token)}

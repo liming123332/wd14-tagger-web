@@ -74,6 +74,22 @@ class Storage:
         self.save_meta(mid, meta)
         return mid
 
+    def replace_image(self, mid: str, pil: Image.Image, source_name: str) -> Meta:
+        """覆盖某 mid 的原图 + 缩略图，仅更新 meta.image（尺寸/文件名），保留
+        tags/categories/source_name/tagger 等——换图不自动反推（与各详情页「替换图片」一致）。
+        mid 非法抛 ValueError；meta 不存在抛 FileNotFoundError（路由转 404）。"""
+        d = self.image_dir(mid)
+        meta = self.get_meta(mid)
+        ext = self._ext_for(source_name)
+        new_original = "original" + ext
+        if meta.image.original and meta.image.original != new_original:
+            (d / meta.image.original).unlink(missing_ok=True)  # ext 变化删旧原图防残留
+        pil.save(d / new_original)
+        w, h = self._make_thumb(pil, d / "thumb.webp")  # 覆盖缩略图
+        meta.image = ImageInfo(original=new_original, thumb="thumb.webp", width=w, height=h)
+        self.save_meta(mid, meta)
+        return meta
+
     def _meta_path(self, mid: str) -> Path:
         return self.image_dir(mid) / "meta.json"
 

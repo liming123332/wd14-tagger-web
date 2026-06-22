@@ -209,6 +209,31 @@ class CharacterDB:
             logger.error(f"search failed: query={query!r}, series={series_filter!r}, tag_status={tag_status_filter!r}, error={e}", exc_info=True)
             return [], 0
 
+    def random(self, size: int = 24, source: Optional[str] = None) -> list[dict]:
+        """随机抽取 size 条角色（ORDER BY RANDOM()）。source 可选过滤数据源。
+
+        用于随机抽取页：旧实现 random_cf 走 search("", limit=size) 固定按 rank ASC
+        取前 N 条，「再抽一页」永远同一批；改真随机抽样。返回列与 search/get_by_id
+        一致（id, name, series, tags, image_url, rank, danbooru_tag, source）。
+        """
+        try:
+            if source and source not in {"both", "all"}:
+                rows = self._get_conn().execute(
+                    "SELECT id, name, series, tags, image_url, rank, danbooru_tag, source "
+                    "FROM characters WHERE source = ? ORDER BY RANDOM() LIMIT ?",
+                    (source, size),
+                ).fetchall()
+            else:
+                rows = self._get_conn().execute(
+                    "SELECT id, name, series, tags, image_url, rank, danbooru_tag, source "
+                    "FROM characters ORDER BY RANDOM() LIMIT ?",
+                    (size,),
+                ).fetchall()
+            return [dict(r) for r in rows]
+        except Exception as e:
+            logger.error(f"random failed: size={size}, source={source!r}, error={e}", exc_info=True)
+            return []
+
     def get(self, name: str) -> Optional[dict]:
         """Exact lookup by character name (case-insensitive)."""
         try:

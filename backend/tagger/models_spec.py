@@ -56,9 +56,9 @@ MODEL_SPECS: dict[str, ModelSpec] = {
     # cl_tagger_v2（cella110n/cl_tagger_v2，SigLIP2-so400m-patch14-384）：架构异构于 v1，
     # 由独立 CLTaggerV2 类处理（不进 OnnxTagger/CLTagger）。权重为外部数据（model.onnx.data），
     # onnxruntime 加载 model.onnx 时自动读取同目录 .data。gated 模型，需手动下载 3 文件放入 folder。
-    # 注意 resolve 路径在仓库 v2_01a/ 子目录下（v2_00 为旧版）。
+    # 远程权重在仓库 v2_01a/ 子目录下（v2_00 为旧版）；本地 folder 用干净 key 名 cl_tagger_v2。
     "cl_tagger_v2": ModelSpec(
-        key="cl_tagger_v2", label="CL Tagger v2", folder="cl_tagger_v2_01a",
+        key="cl_tagger_v2", label="CL Tagger v2", folder="cl_tagger_v2",
         files={"model.onnx": f"{_HF}/cella110n/cl_tagger_v2/resolve/main/v2_01a/model.onnx",
                "model.onnx.data": f"{_HF}/cella110n/cl_tagger_v2/resolve/main/v2_01a/model.onnx.data",
                "model_vocabulary.json": f"{_HF}/cella110n/cl_tagger_v2/resolve/main/v2_01a/model_vocabulary.json"},

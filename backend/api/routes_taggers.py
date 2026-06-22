@@ -16,6 +16,13 @@ def list_taggers():
     ]
 
 
+@router.get("/download-progress")
+def download_progress():
+    # 当前下载任务状态（前端轮询显示进度）：文件名/已下载/总大小/第几个文件。
+    from backend.tagger._download_util import get_state
+    return get_state()
+
+
 @router.post("/{key}/download")
 def download_tagger(key: str):
     if key not in models_spec.MODEL_SPECS:

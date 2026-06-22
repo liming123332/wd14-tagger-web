@@ -212,6 +212,20 @@ def update_item(
     return item.model_dump()
 
 
+@router.post("/{item_id}/replace-image")
+def replace_main_image_item(item_id: str, file: UploadFile = File(...)):
+    """替换主图（覆盖第一张示例图）；无图则等同上传。保留标签等其余字段。"""
+    store = get_promptbox_store()
+    if store.get(item_id) is None:
+        raise HTTPException(status_code=404, detail="not found")
+    data = file.file.read()
+    try:
+        it = store.replace_main_image(item_id, file.filename or "img.png", data)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="not found")
+    return it.model_dump()
+
+
 @router.delete("/{item_id}")
 def delete_item(item_id: str):
     get_promptbox_store().delete(item_id)

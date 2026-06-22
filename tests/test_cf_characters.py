@@ -389,3 +389,67 @@ def test_recent_resolve_char_danbooru(tmp_path, monkeypatch):
     assert len(items) == 1
     assert items[0]["entry_key"] == "char:danbooru:1"
     assert items[0]["name"] == "miku"
+
+
+# ============================================================================
+# 主题 4：/api/cf/random 真随机回归。
+# 修前 random_cf 走 db.search("", limit=size) 固定 ORDER BY rank ASC，取前 N 条，
+# 导致「再抽一页」永远返回同一批；修后 db.random(size) 用 ORDER BY RANDOM()。
+# ============================================================================
+
+def _many_char_app(tmp_path, monkeypatch):
+    """50 行 danbooru 角色的最小 app，供随机抽样测试（小样本下两次必然不同）。"""
+    monkeypatch.setattr("backend.config.settings.CF_DIR", tmp_path / "cf")
+    monkeypatch.setattr("backend.config.settings.CF_OVERLAY_DB", tmp_path / "cf/cf_overlay.db")
+    monkeypatch.setattr("backend.config.settings.CF_OVERLAY_DIR", tmp_path / "cf/overlay")
+    monkeypatch.setattr("backend.config.settings.CF_FAVORITES_PATH", tmp_path / "cf/fav.json")
+    monkeypatch.setattr("backend.config.settings.CF_RECENT_PATH", tmp_path / "cf/recent.json")
+    monkeypatch.setattr("backend.characterfinder.paths.CHARACTERS_DB", tmp_path / "cf/characters.db")
+    for f in (deps.get_character_db, deps.get_cf_overlay, deps.get_cf_favorites, deps.get_cf_recent):
+        f.cache_clear()
+    (tmp_path / "cf").mkdir()
+    c = sqlite3.connect(tmp_path / "cf/characters.db")
+    c.executescript(
+        "CREATE TABLE characters(id INTEGER PRIMARY KEY, name TEXT, series TEXT, tags TEXT, "
+        "image_url TEXT, rank INTEGER, danbooru_tag TEXT, source TEXT DEFAULT 'danbooru')"
+    )
+    for i in range(50):
+        c.execute(
+            "INSERT INTO characters(id,name,series,tags,image_url,rank,source) VALUES(?,?,?,?,?,?,?)",
+            (i + 1, f"c{i}", "s", "t", f"http://x/c{i}.jpg", i, "danbooru"),
+        )
+    c.commit(); c.close()
+    return create_app()
+
+
+def test_random_returns_different_rows_across_calls(tmp_path, monkeypatch):
+    # 真随机回归：50 抽 10，两次结果集合不同（概率 ≈1/C(50,10)≈1e-10，不会 flaky）。
+    # 修前两次必然完全相同（固定 rank ASC 取前 10）→ 此断言失败。
+    client = TestClient(_many_char_app(tmp_path, monkeypatch))
+    r1 = client.get("/api/cf/random", params={"type": "characters", "source": "danbooru", "size": 10})
+    r2 = client.get("/api/cf/random", params={"type": "characters", "source": "danbooru", "size": 10})
+    assert r1.status_code == 200 and r2.status_code == 200
+    ids1 = {it["entry_key"] for it in r1.json()["items"]}
+    ids2 = {it["entry_key"] for it in r2.json()["items"]}
+    assert len(ids1) == 10 and len(ids2) == 10
+    assert ids1 != ids2
+
+
+def test_random_db_method_shuffles(tmp_path):
+    # 单元层：CharacterDB.random 多次调用结果会变（直接验证 ORDER BY RANDOM()）。
+    from backend.characterfinder.character_db import CharacterDB
+    db_path = tmp_path / "characters.db"
+    # _migrate 假定 characters 表已存在（它 ALTER ADD COLUMN），故先用原生 sqlite3
+    # 建表+插数据，再实例化 DB，避免 _get_conn()→_migrate() 撞 no such table。
+    c = sqlite3.connect(db_path)
+    c.executescript(
+        "CREATE TABLE characters(id INTEGER PRIMARY KEY, name TEXT, series TEXT, tags TEXT, "
+        "image_url TEXT, rank INTEGER, danbooru_tag TEXT, source TEXT DEFAULT 'danbooru')"
+    )
+    for i in range(40):
+        c.execute("INSERT INTO characters(id,name,rank) VALUES(?,?,?)", (i + 1, f"c{i}", i))
+    c.commit(); c.close()
+    db = CharacterDB(db_path=db_path)
+    samples = [tuple(r["id"] for r in db.random(10)) for _ in range(5)]
+    # 5 次抽样里至少有一次与第一次不同（全相同概率≈0）
+    assert any(s != samples[0] for s in samples[1:])

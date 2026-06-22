@@ -7,6 +7,7 @@ import { useRouter } from 'vue-router'
 import { useBatch } from '../composables/useBatch'
 import BatchBars from '../components/BatchBars.vue'
 import { IconCheck } from '../components/icons'
+import { useImagePasteDrop } from '../composables/useImagePasteDrop'
 
 const router = useRouter()
 const msg = useMessage()
@@ -17,6 +18,10 @@ const autoTag = ref(true)
 const pending = ref<File[]>([])
 // 本批图片统一打上的自定义标签（上传时带给每张图）
 const pendingTags = ref<string[]>([])
+// 粘贴(Ctrl+V)/拖放图片 → 直接进 pending（和「选择图片」等价，不立即反推）
+const { dragging, dropHandlers } = useImagePasteDrop((files) => {
+  pending.value = [...pending.value, ...files]
+})
 const tagger = useTagger()
 const taggerOptions = computed(() => tagger.state.taggers.map(t => ({
   label: t.label, value: t.key, downloaded: t.downloaded,
@@ -78,14 +83,17 @@ async function onUnload() {
 <template>
   <n-space vertical>
     <n-card title="上传图片">
-      <n-upload multiple :default-upload="false" :show-file-list="false" :disabled="isBusy()"
-                v-model:file-list="fileList" @change="onSelect" accept="image/*">
-        <n-button :disabled="isBusy()">选择图片（可多选）</n-button>
-      </n-upload>
-      <!-- 关掉默认文件名列表后用紧凑汇总条代替：只显示已选数量+清空，避免选几十张撑满页面 -->
-      <div v-if="pending.length" style="margin-top:10px;display:flex;align-items:center;gap:12px">
-        <span style="font-size:13px">已选 {{ pending.length }} 张</span>
-        <n-button size="tiny" :disabled="isBusy()" @click="clearSel">清空</n-button>
+      <div v-bind="dropHandlers" :class="['drop-zone', { active: dragging }]">
+        <n-upload multiple :default-upload="false" :show-file-list="false" :disabled="isBusy()"
+                  v-model:file-list="fileList" @change="onSelect" accept="image/*">
+          <n-button :disabled="isBusy()">选择图片（可多选）</n-button>
+        </n-upload>
+        <span style="font-size:12px;color:var(--cat-input-color,#888);margin-left:8px">也可 Ctrl+V 粘贴或把图片拖到这里</span>
+        <!-- 关掉默认文件名列表后用紧凑汇总条代替：只显示已选数量+清空，避免选几十张撑满页面 -->
+        <div v-if="pending.length" style="margin-top:10px;display:flex;align-items:center;gap:12px">
+          <span style="font-size:13px">已选 {{ pending.length }} 张</span>
+          <n-button size="tiny" :disabled="isBusy()" @click="clearSel">清空</n-button>
+        </div>
       </div>
     </n-card>
     <n-card title="反推设置">
@@ -138,3 +146,8 @@ async function onUnload() {
     </n-card>
   </n-space>
 </template>
+
+<style scoped>
+.drop-zone { border: 2px dashed transparent; border-radius: 6px; padding: 4px; transition: border-color 0.15s, background 0.15s }
+.drop-zone.active { border-color: #18a058; background: rgba(24,160,88,0.06) }
+</style>

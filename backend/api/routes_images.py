@@ -134,6 +134,24 @@ def save_meta_endpoint(mid: str, meta: Meta):
     return storage.get_meta(mid).model_dump()
 
 
+@router.post("/{mid}/replace")
+def replace_image_endpoint(mid: str, file: UploadFile = File(...)):
+    """替换某图库图片的原图+缩略图，保留 meta 标签/收藏（不自动反推）。
+    旧标签与新图可能不符，前端提示用户可手动「重新反推」。"""
+    storage = get_storage()
+    try:
+        storage.get_meta(mid)  # 校验存在性 + mid 合法性
+    except (FileNotFoundError, ValueError):
+        raise HTTPException(status_code=404, detail="image not found")
+    try:
+        pil = Image.open(file.file)
+        pil.load()
+    except (UnidentifiedImageError, OSError) as e:
+        raise HTTPException(status_code=400, detail=f"bad image: {e}")
+    meta = storage.replace_image(mid, pil, file.filename or "replace.png")
+    return meta.model_dump()
+
+
 @router.delete("/{mid}")
 def delete_image(mid: str):
     try:

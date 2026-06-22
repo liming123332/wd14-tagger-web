@@ -274,7 +274,7 @@ def write_launchers() -> None:
         "WD14 Tagger Web 使用说明\n"
         "========================\n\n"
         "1. 首次使用：把模型文件夹拷到 wd14-tagger-web\\models\\ 下。\n"
-        "   （例如 models\\wd14\\、models\\cl_tagger\\、models\\cl_tagger_v2_01a\\ 等，\n"
+        "   （例如 models\\wd14\\、models\\cl_tagger\\、models\\cl_tagger_v2\\ 等，\n"
         "    文件夹名要和程序里一致；不知道就全拷进去。）\n\n"
         "2. 双击「启动.bat」，会自动打开浏览器访问 http://127.0.0.1:8000\n"
         "   （若浏览器没自动开，手动打开浏览器输入这个地址）。\n\n"
@@ -306,9 +306,10 @@ def write_launchers() -> None:
     )
     log(f"写入 {update_note.name}")
 
-    # 更新anima数据.bat：双击即从本机 animadex-data 同步角色/艺术家数据到整合包 data。
-    # 前置是用户先用 AnimaDex\import.bat 拉取最新数据；本 bat 只负责把数据搬进整合包。
-    # %* 透传参数，故命令行可追加 --prune / --animadex-data 等。
+    # 更新anima数据.bat：双击即一键从 animadex.net 拉取 + 重建整合包 anima 库。
+    # [1/2] fetch_anima.py 用 export token 拉数据到内部 _anima_source/（首次提示填 token）；
+    # [2/2] update_anima.py 从内部 source 重建 anima DB + 主库 anima 行 + 缩略图。
+    # %* 透传给 fetch（可追加 --token/--full/--dry-run）。
     anima_bat = PKG_ROOT / "更新anima数据.bat"
     anima_bat.write_text(
         "@echo off\r\n"
@@ -316,16 +317,25 @@ def write_launchers() -> None:
         'cd /d "%~dp0"\r\n'
         "echo.\r\n"
         "echo ===== 更新 Anima 角色/艺术家数据 =====\r\n"
-        "echo 从本机 animadex-data 同步到整合包 data\r\n"
-        "echo 前提：先用 AnimaDex\\import.bat 拉取最新数据\r\n"
+        "echo 从 animadex.net 拉取 + 重建整合包库\r\n"
         "echo ========================================\r\n"
         "echo.\r\n"
         'if not exist "runtime\\python.exe" (\r\n'
         "    echo [错误] 未找到 runtime\\python.exe，这不是完整整合包。\r\n"
         "    pause & exit /b 1\r\n"
         ")\r\n"
-        '"%~dp0runtime\\python.exe" "%~dp0wd14-tagger-web\\scripts\\update_anima.py" %*\r\n'
+        "echo [1/2] 从 animadex.net 拉取数据（首次会提示输入 token）...\r\n"
+        '"%~dp0runtime\\python.exe" "%~dp0wd14-tagger-web\\scripts\\fetch_anima.py" %*\r\n'
+        "if errorlevel 1 (\r\n"
+        "    echo.\r\n"
+        "    echo [拉取失败] 请按提示处理（如 token 失效则到 animadex.net 重新生成）。\r\n"
+        "    pause & exit /b 1\r\n"
+        ")\r\n"
         "echo.\r\n"
+        "echo [2/2] 重建整合包 anima 库...\r\n"
+        '"%~dp0runtime\\python.exe" "%~dp0wd14-tagger-web\\scripts\\update_anima.py"\r\n'
+        "echo.\r\n"
+        "echo 完成。请重启后端（关闭启动窗口后重新双击 启动.bat）。\r\n"
         "pause\r\n",
         encoding="utf-8", newline="",  # 同 start_bat：bat 必须 CRLF，禁用 text mode 双重转换
     )

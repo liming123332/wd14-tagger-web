@@ -21,6 +21,7 @@ from backend.deps import (
     get_cf_overlay,
 )
 from backend.characterfinder import paths
+from backend.characterfinder.anima_db import character_thumb_url, artist_thumb_url
 
 router = APIRouter(prefix="/api/cf/asset", tags=["cf-asset"])
 
@@ -101,3 +102,53 @@ def get_asset(kind: str = Query(...), source: str = Query(...),
         return RedirectResponse(url, status_code=307)
     # 4) 都没有
     raise HTTPException(status_code=404, detail="no asset")
+
+
+def _download_to(url: str, dest: Path) -> int:
+    """下载 URL 到 dest（.part 临时文件 + os.replace 原子改名，避免半成品/杀软锁）。
+    思路同 scripts/fetch_anima.py 的 download()。"""
+    import os
+    import urllib.error
+    import urllib.request
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_suffix(dest.suffix + ".part")
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "wd14-portable/1"})
+        with urllib.request.urlopen(req, timeout=60) as r, open(tmp, "wb") as f:
+            data = r.read()
+            f.write(data)
+        os.replace(tmp, dest)
+        return len(data)
+    except urllib.error.HTTPError as e:
+        tmp.unlink(missing_ok=True)
+        if e.code == 404:
+            raise HTTPException(status_code=404, detail="服务端暂无此缩略图")
+        raise HTTPException(status_code=502, detail=f"下载失败: HTTP {e.code}")
+    except Exception as e:
+        tmp.unlink(missing_ok=True)
+        raise HTTPException(status_code=502, detail=f"下载失败: {e}")
+
+
+@router.post("/refresh-thumb")
+def refresh_thumb(kind: str = Query(...), source: str = Query(...), key: str = Query(...)):
+    """重新从 animadex R2 拉取单个角色/画师的 webp 缩略图到本地（公开 URL，无需 token）。
+    仅 anima 源；下载到 paths.ANIMA_DIR/{characters,artists}/<thumbname>，与 local_image_path
+    的 anima 落点一致，下次 /api/cf/asset 即命中本地。"""
+    if source != "anima":
+        raise HTTPException(status_code=400, detail="仅 anima 源支持重新拉取缩略图")
+    if kind == "char":
+        row = get_anima_character_db().get_by_character(key) or {}
+        thumbname = row.get("thumbname")
+        url = character_thumb_url(thumbname) if thumbname else None
+        dest_dir = paths.ANIMA_DIR / "characters"
+    elif kind == "artist":
+        row = get_anima_artist_db().get_by_artist(key) or {}
+        thumbname = row.get("thumbname")
+        url = artist_thumb_url(thumbname) if thumbname else None
+        dest_dir = paths.ANIMA_DIR / "artists"
+    else:
+        raise HTTPException(status_code=400, detail="kind 必须是 char 或 artist")
+    if not thumbname or not url:
+        raise HTTPException(status_code=404, detail="该条目无缩略图记录")
+    n = _download_to(url, dest_dir / thumbname)
+    return {"ok": True, "bytes": n, "name": thumbname}

@@ -13,6 +13,9 @@ DANBOORU_TAGS_CSV = settings.CF_DIR / "danbooru_tags.csv"
 COVERS_DIR = settings.CF_COVERS_DIR
 ARTIST_COVERS_DIR = settings.CF_ARTIST_COVERS_DIR
 ANIMA_DIR = settings.CF_ANIMA_DIR
+# animadex 内部拉取产物（fetch_anima.py 产生/读取；SOURCE_DIR/TOKEN_PATH 字面一致，注释互引）
+ANIMA_SOURCE_DIR = settings.CF_DIR / "_anima_source"
+ANIMA_TOKEN_PATH = ANIMA_SOURCE_DIR / ".token"
 OVERLAY_DB = settings.CF_OVERLAY_DB
 OVERLAY_DIR = settings.CF_OVERLAY_DIR
 

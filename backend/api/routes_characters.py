@@ -14,6 +14,7 @@ from fastapi import APIRouter, HTTPException, Query, UploadFile, File
 from pydantic import BaseModel
 from PIL import Image, UnidentifiedImageError
 import secrets
+from urllib.parse import quote
 
 # 裁决 C（Task 11）：将 favorites/recent/random 追加端点需要的依赖合并进此顶部
 # import 块（避免 brief 写的中部重复 import 块）。原 Task 9/10 已含 char 侧依赖，
@@ -39,7 +40,10 @@ router = APIRouter(prefix="/api/cf", tags=["cf-characters"])
 
 
 def _asset_url(kind: str, source: str, key: str, which: str) -> str:
-    return f"/api/cf/asset?kind={kind}&source={source}&key={key}&which={which}"
+    # key 来自权威数据，可能含 & # = 等字符（如组合画师 "a & b"）。
+    # 必须 URL 编码，否则会截断查询字符串（前端列表 cfAssetUrl 已编码，
+    # 详情页用的是后端拼的此 URL，故在此编码）。kind/source/which 为枚举值，无需编码。
+    return f"/api/cf/asset?kind={kind}&source={source}&key={quote(key, safe='')}&which={which}"
 
 
 def _split_tags(text: str) -> list[str]:
@@ -293,16 +297,18 @@ def list_recent(kind: str = Query("char", pattern="^(char|artist)$"),
 @router.get("/random")
 def random_cf(type: str = Query("characters"), source: str = Query("danbooru"),
               size: int = Query(24, ge=1, le=200)):
+    # 真随机：db.random(size) 用 ORDER BY RANDOM()。旧实现 db.search("", limit=size)
+    # 固定 ORDER BY rank/count ASC 取前 N，「再抽一页」永远返回同一批——已修。
     if type == "artists":
         db = get_anima_artist_db() if source == "anima" else get_artist_db()
-        rows, _ = db.search("", limit=size, offset=0)
+        rows = db.random(size)
         favs = set(get_cf_artist_favorites().get_all())
         from backend.api.routes_artists import _anima_artist, _danbooru_artist
         items = [_anima_artist(r, paths.entry_key("artist", source, r["artist"]) in favs) if source == "anima"
                  else _danbooru_artist(r, paths.entry_key("artist", "danbooru", str(r["id"])) in favs) for r in rows]
     else:
         db = get_anima_character_db() if source == "anima" else get_character_db()
-        rows, _ = db.search("", limit=size, offset=0)
+        rows = db.random(size)
         favs = set(get_cf_favorites().get_all())
         items = [_anima_item(r, paths.entry_key("char", source, r["character"]) in favs) if source == "anima"
                  else _danbooru_item(r, paths.entry_key("char", "danbooru", str(r["id"])) in favs) for r in rows]

@@ -8,6 +8,7 @@ import {
   splitPrompt, analyzePromptbox, savePromptbox, promptboxWorkspaceImageUrl,
 } from '../api/client'
 import { useTagger } from '../composables/useTagger'
+import { useImagePasteDrop } from '../composables/useImagePasteDrop'
 
 // 「提示词收藏」工作台（图库网格风格）：上传图片反推 → 工作区网格 → 点选拆分编辑 → 另存收藏。
 // 反推图落 promptbox workspace（与图库隔离）；也保留「粘贴提示词拆分」入口（无图项）。
@@ -44,8 +45,12 @@ const pasteText = ref('')
 const analyzing = ref(false)
 const splitting = ref(false)
 
-// 模型选择（独立 localModel，复用 useTagger；与上传页/详情页同款 renderTaggerLabel）
-const localModel = ref('wd14')
+// 模型选择：localModel 与全局 tagger.state.selected 双向绑定——切换即 setSelected
+// （同步 + 持久化），读即当前全局选中。与上传页共享同一记忆，跨页面/跨会话一致。
+const localModel = computed({
+  get: () => tagger.state.selected,
+  set: (v: string) => tagger.setSelected(v),
+})
 const taggerOptions = computed(() => tagger.state.taggers.map(t => ({
   label: t.label, value: t.key, downloaded: t.downloaded,
 })))
@@ -68,13 +73,12 @@ const genTh = ref(0.35)
 const charTh = ref(0.9)
 const isCl = computed(() => localModel.value === 'cl_tagger')
 const charLabel = computed(() => isCl.value ? '角色名称识别阈值（仅 cl_tagger 生效）' : '角色阈值')
-// cl_tagger 默认 0.6，用户切换模型时自适应（与 UploadPage 一致）
-let modelChangeFromInit = false
+// 切换模型自适应阈值（与 UploadPage 一致）；immediate 让初始按缓存模型设阈值。
+// localModel 镜像全局 state.selected，setSelected 已持久化，无需另写缓存。
 watch(localModel, (m) => {
-  if (modelChangeFromInit) { modelChangeFromInit = false; return }
   if (m === 'cl_tagger_v2') { genTh.value = 0.55; charTh.value = 0.55 }
   else { charTh.value = m === 'cl_tagger' ? 0.6 : 0.9 }
-})
+}, { immediate: true })
 
 function emptyCats(): Record<string, string[]> {
   return Object.fromEntries(ORDER.map(k => [k, [] as string[]]))
@@ -105,6 +109,9 @@ async function doAnalyze(files: File[]) {
   } catch (e: any) { msg.error('反推失败：' + e.message) }
   finally { analyzing.value = false }
 }
+
+// 粘贴(Ctrl+V)/拖放图片 → 直接反推（和「选择图片反推」一致）；文本粘贴不拦截，走下方 doPasteSplit
+const { dragging, dropHandlers } = useImagePasteDrop((files) => doAnalyze(files))
 
 // 粘贴拆分（无图工作区项）
 async function doPasteSplit() {
@@ -141,6 +148,15 @@ const fullPrompt = computed(() => {
 async function copyPrompt() {
   if (!fullPrompt.value) { msg.warning('暂无提示词'); return }
   try { await navigator.clipboard.writeText(fullPrompt.value); msg.success('已复制完整 prompt') }
+  catch { msg.error('复制失败') }
+}
+
+// 拆分编辑：复制某分类当前标签（逗号拼接），与 TagEditor.copyCurrent 一致
+async function copyCat(k: string) {
+  const it = selected.value
+  if (!it) return
+  const tags = k === 'extras' ? it.extras : (it.categories[k] || [])
+  try { await navigator.clipboard.writeText(tags.join(', ')); msg.success('已复制当前分类') }
   catch { msg.error('复制失败') }
 }
 
@@ -188,14 +204,15 @@ function removeItem(idx: number) {
   <n-space vertical>
     <!-- 工具栏：上传反推 + 模型/阈值 + 粘贴 -->
     <n-card title="上传图片反推">
-      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+      <div v-bind="dropHandlers" :class="['drop-zone', { active: dragging }]" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
         <n-upload multiple :default-upload="false" :show-file-list="false"
                   v-model:file-list="fileList" @change="onUploadChange" accept="image/*">
           <n-button :loading="analyzing" type="primary">选择图片反推（可多选）</n-button>
         </n-upload>
+        <span style="font-size:12px;color:var(--cat-input-color,#888)">可粘贴/拖入图片</span>
         <span style="font-size:13px">反推模型</span>
         <n-select :value="localModel" :options="taggerOptions" :render-label="renderTaggerLabel"
-                  @update:value="(v: string) => localModel = v" size="small" style="max-width:240px" />
+                  @update:value="(v: string) => tagger.setSelected(v)" size="small" style="max-width:240px" />
         <div v-if="!modelDownloaded" style="display:flex;align-items:center;gap:6px">
           <span style="font-size:12px;color:#d03050">未下载</span>
           <n-button size="tiny" :loading="tagger.state.downloading === localModel" @click="doDownload">下载</n-button>
@@ -236,7 +253,10 @@ function removeItem(idx: number) {
     <!-- 选中项拆分编辑 -->
     <n-card v-if="selected" title="拆分编辑（选中项）">
       <div v-for="k in [...ORDER, 'extras']" :key="k" style="margin-top:8px">
-        <div style="font-size:13px;margin-bottom:2px">{{ TITLES[k] }}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
+          <span style="font-size:13px">{{ TITLES[k] }}</span>
+          <n-button size="tiny" @click="copyCat(k)">复制当前分类</n-button>
+        </div>
         <n-dynamic-tags v-if="k !== 'extras'" :value="selected.categories[k] || []"
                         @update:value="(v: string[]) => setCat(k, v)" />
         <n-dynamic-tags v-else :value="selected.extras" @update:value="(v: string[]) => setExtras(v)" />
@@ -251,6 +271,8 @@ function removeItem(idx: number) {
 </template>
 
 <style scoped>
+.drop-zone { border: 2px dashed transparent; border-radius: 6px; padding: 4px; transition: border-color 0.15s, background 0.15s }
+.drop-zone.active { border-color: #18a058; background: rgba(24,160,88,0.06) }
 .ws-card { cursor: pointer; border-radius: 6px; transition: outline 0.1s }
 .ws-card.selected { outline: 2px solid #18a058; outline-offset: 2px }
 .thumb { width: 100%; height: 160px; overflow: hidden }

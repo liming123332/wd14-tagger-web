@@ -1,5 +1,5 @@
 import { reactive } from 'vue'
-import { listTaggers, downloadTagger, unloadAllTaggers, type TaggerInfo } from '../api/client'
+import { listTaggers, downloadTagger, unloadAllTaggers, getDownloadProgress, type TaggerInfo, type DownloadProgress } from '../api/client'
 
 const LS_KEY = 'wd14-tagger.lastModel'
 const DEFAULT_MODEL = 'wd14'
@@ -9,14 +9,16 @@ interface TaggerState {
   taggers: TaggerInfo[]
   downloading: string | null
   unloading: boolean
+  progress: DownloadProgress | null
 }
 
-// 模块级单例（同 useBatch）：跨组件共享当前选中模型。
+// 模块级单例（同 useBatch）：跨组件共享当前选中模型 + 下载进度。
 const state = reactive<TaggerState>({
   selected: localStorage.getItem(LS_KEY) || DEFAULT_MODEL,
   taggers: [],
   downloading: null,
   unloading: false,
+  progress: null,
 })
 
 function persist() {
@@ -50,10 +52,16 @@ function isDownloaded(key: string): boolean {
 
 async function download(key: string) {
   state.downloading = key
+  state.progress = null
+  // 轮询后端下载进度（每 0.5s），驱动 App.vue 全局进度浮层
+  const timer = setInterval(async () => {
+    try { state.progress = await getDownloadProgress() } catch { /* 忽略轮询瞬时失败 */ }
+  }, 500)
   try {
     await downloadTagger(key)
     await refresh()
   } finally {
+    clearInterval(timer)
     state.downloading = null
   }
 }

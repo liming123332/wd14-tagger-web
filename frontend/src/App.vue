@@ -9,6 +9,7 @@ import { useRouter, useRoute } from 'vue-router'
 import BatchBadge from './components/BatchBadge.vue'
 import { lightOverrides, darkOverrides } from './styles/theme'
 import { useTheme } from './composables/useTheme'
+import { useTagger } from './composables/useTagger'
 import {
   IconUpload, IconGallery, IconRandom, IconStar, IconEdit, IconSettings,
   IconSun, IconMoon, IconMonitor, IconFolderTag, IconCharacter, IconArtist, IconBookmark,
@@ -17,6 +18,27 @@ import {
 const router = useRouter()
 const route = useRoute()
 const { mode, effective, setMode } = useTheme()
+const tagger = useTagger()
+
+// 下载进度浮层文本/百分比（来自 useTagger 轮询的后端 _state）
+function human(n: number): string {
+  if (n < 1024) return n + 'B'
+  let v = n / 1024; let i = 0
+  for (const u of ['KB', 'MB', 'GB']) { if (v < 1024 || i === 2) return v.toFixed(1) + u; v /= 1024; i++ }
+  return v.toFixed(1) + 'TB'
+}
+const progressText = computed(() => {
+  const p = tagger.state.progress
+  if (!p) return '准备下载…'
+  const pct = p.size ? Math.round(p.downloaded * 100 / p.size) : 0
+  const sz = p.size ? `${human(p.downloaded)} / ${human(p.size)}` : human(p.downloaded)
+  return `${p.file || '…'} · ${sz} · ${pct}% · 文件 ${p.index + 1}/${p.total_files}`
+})
+const progressPct = computed(() => {
+  const p = tagger.state.progress
+  if (!p || !p.size) return 0
+  return Math.min(100, Math.round(p.downloaded * 100 / p.size))
+})
 
 const theme = computed<GlobalTheme | null>(() => (effective.value === 'dark' ? darkTheme : null))
 const overrides = computed(() => (effective.value === 'dark' ? darkOverrides : lightOverrides))
@@ -96,6 +118,14 @@ function cycleTheme() {
             </div>
           </n-layout-content>
         </n-layout>
+        <!-- 全局下载进度浮层（任意页面点下载都显示） -->
+        <div v-if="tagger.state.downloading" class="dl-bar">
+          <div class="dl-head">
+            <span class="dl-title">下载模型 {{ tagger.state.downloading }}</span>
+            <span class="dl-text">{{ progressText }}</span>
+          </div>
+          <div class="dl-track"><div class="dl-fill" :style="{ width: progressPct + '%' }"></div></div>
+        </div>
       </n-dialog-provider>
     </n-message-provider>
   </n-config-provider>
@@ -114,4 +144,16 @@ function cycleTheme() {
 }
 .topbar .title { font-size: 15px; font-weight: 600 }
 .content { padding: 16px 20px 32px; max-width: 1600px; margin: 0 auto }
+.dl-bar {
+  position: fixed; right: 16px; bottom: 16px; width: 320px; z-index: 1000;
+  padding: 10px 12px; border-radius: 8px;
+  background: var(--n-card-color, #fff);
+  border: 1px solid var(--n-border-color, #eceef1);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.14);
+}
+.dl-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px }
+.dl-title { font-size: 13px; font-weight: 600; white-space: nowrap }
+.dl-text { font-size: 11px; color: var(--n-text-color-3, #888); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.dl-track { height: 6px; margin-top: 8px; border-radius: 3px; overflow: hidden; background: var(--n-color-hover, #eef0f2) }
+.dl-fill { height: 100%; background: #18a058; transition: width 0.3s ease }
 </style>

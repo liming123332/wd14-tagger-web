@@ -9,7 +9,7 @@ import {
 import TagEditor from '../components/TagEditor.vue'
 import {
   getCharacter, tagCharacter, reclassifyCharacter, saveCharacter,
-  uploadCharacterImage, toggleCharacterFavorite, type CfDetail,
+  uploadCharacterImage, toggleCharacterFavorite, refreshThumb, type CfDetail,
 } from '../api/characterfinder'
 import { useTagger } from '../composables/useTagger'
 import { buildPromptWithLocked } from '../detail-utils'
@@ -119,6 +119,15 @@ async function toggleFav() {
     detail.value!.favorite = r.favorite
   } catch (e: any) { msg.error('收藏失败：' + e.message) }
 }
+const refreshing = ref(false)
+async function refreshCover() {
+  refreshing.value = true
+  try {
+    await refreshThumb('char', source.value, key.value)
+    imgVersion.value++; msg.success('已重新拉取')
+  } catch (e: any) { msg.error('拉取失败：' + e.message) }
+  finally { refreshing.value = false }
+}
 
 const fullPrompt = computed(() => detail.value ? buildPromptWithLocked(detail.value, detail.value.locked_tags) : '')
 async function copyPrompt() {
@@ -166,9 +175,9 @@ defineExpose({ save, reTag, reClassify, uploadImage, toggleFav })
           <n-upload :show-file-list="false" :max="1" accept="image/*" :custom-request="onUploadReq">
             <n-button size="small"><IconPlus/> 替换图片</n-button>
           </n-upload>
+          <n-button v-if="source === 'anima'" size="small" :loading="refreshing" @click="refreshCover">重新拉取封面</n-button>
           <n-button size="small" @click="reTag">重新反推</n-button>
           <n-button size="small" @click="reClassify">重分类</n-button>
-          <n-button size="small" @click="copyPrompt">复制完整 prompt</n-button>
           <n-button size="small" :type="detail.favorite ? 'warning' : 'default'" @click="toggleFav">
             {{ detail.favorite ? '★ 已收藏' : '☆ 收藏' }}
           </n-button>
@@ -188,6 +197,7 @@ defineExpose({ save, reTag, reClassify, uploadImage, toggleFav })
           <n-radio-button value="tags">标签</n-radio-button>
           <n-radio-button value="phrase">短句</n-radio-button>
         </n-radio-group>
+        <n-button size="small" @click="copyPrompt">复制完整 prompt</n-button>
         <n-button size="small" type="primary" :disabled="!dirty" @click="save">保存</n-button>
       </n-space>
       <TagEditor v-for="[k, title, color] in KEY_TITLES" :key="k" :title="title" :color="color"

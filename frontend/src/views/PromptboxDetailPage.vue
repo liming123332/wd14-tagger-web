@@ -9,7 +9,7 @@ import TagEditor from '../components/TagEditor.vue'
 import {
   getPromptbox, updatePromptbox, deletePromptbox,
   tagPromptbox, reclassifyPromptbox, promptboxImageUrl,
-  applyCategoryRules, type PromptboxItem,
+  applyCategoryRules, replacePromptboxImage, type PromptboxItem,
 } from '../api/client'
 import { useTagger } from '../composables/useTagger'
 import { IconPlus } from '../components/icons'
@@ -164,6 +164,20 @@ function onUploadReq({ file }: any) {
   if (f) uploadImage(f)
 }
 
+// 替换主图：覆盖第一张示例图（无图则等同上传）。promptbox 图名 token 随机，
+// 替换后 image_names[0] 换名 → URL 变 → n-image 自动重载，无需 cache-buster。
+async function replaceMainImg(file: File) {
+  if (!item.value) return
+  try {
+    const updated = await replacePromptboxImage(id.value, file)
+    fromItem(updated); msg.success('主图已替换')
+  } catch (e: any) { msg.error('替换失败：' + e.message) }
+}
+function onUploadReqReplace({ file }: any) {
+  const f = (file as any)?.file as File | undefined
+  if (f) replaceMainImg(f)
+}
+
 const hasImage = computed(() => !!item.value && item.value.image_names.length > 0)
 const hasRawTags = computed(() => !!item.value && Object.keys(item.value.raw_tags || {}).length > 0)
 
@@ -227,6 +241,9 @@ async function copyPrompt() {
         <n-space vertical style="margin-top:8px">
           <n-upload :show-file-list="false" :max="1" accept="image/*" :custom-request="onUploadReq">
             <n-button size="small"><IconPlus/> 上传图片</n-button>
+          </n-upload>
+          <n-upload :show-file-list="false" :max="1" accept="image/*" :custom-request="onUploadReqReplace">
+            <n-button size="small" :disabled="!hasImage">替换主图</n-button>
           </n-upload>
           <n-button size="small" :disabled="!hasImage" @click="reTag">重新反推</n-button>
           <n-button size="small" :disabled="!hasRawTags" @click="reClassify">重分类</n-button>
