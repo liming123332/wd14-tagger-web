@@ -132,21 +132,18 @@ def prepare_runtime(force: bool) -> None:
         log(f"  复用已下载 wheel: {dl_dir}")
     run(install_cmd)
 
-    # 4b. 翻译模型推理 wheel：llama-cpp-python Blackwell CUDA 预编译包。
+    # 4b. 翻译模型推理 wheel：llama-cpp-python 预编译包。
     #     清华/PyPI 均无 win 预编译包（只有 sdist，本机无 MSVC 会编译失败），必须用 _dl 本地 wheel。
-    #     glob 兼容未来版本号变更；缺失则警告（翻译功能不可用，不影响 tagger 主流程）。
+    #     0.3.31 通用 wheel 内置 sm75/80/86/89/90 全架构 cubin + sm90 PTX，
+    #     RTX 50/40/30/20 均原生或 JIT 适配——预装一个通吃，无需启动时切架构。
     llama_whls = sorted((SRC_ROOT / "_dl").glob("llama_cpp_python*.whl"))
     if llama_whls:
-        # 预装默认 Blackwell（RTX50）：打包机/开发机通常是 50 系，直接可用；其他架构（RTX40
-        # 等）首次启动由 scripts/init_llama_wheel.py 自动切换。不再用 sorted[-1]——那受
-        # 文件名字母序影响（_dl 有多 wheel 时会装到不可控的那个，如 sm89 排在 blackwell 后）。
-        default = next((w for w in llama_whls if "blackwell" in w.name.lower()), None)
+        # 优先 0.3.31 通用 wheel（通吃 RTX 50/40/30/20）；缺失则退回 Blackwell（仅 RTX 50）。
+        default = next((w for w in llama_whls if "0.3.31" in w.name), None)
         if default is None:
-            default = llama_whls[-1]  # 兜底：_dl 无 blackwell（只下了其他架构）时取最后一个
-        log(f"安装翻译推理 wheel（默认 Blackwell）: {default.name}")
-        run([str(pyexe), "-m", "pip", "install", str(default),
-             "-i", "https://pypi.tuna.tsinghua.edu.cn/simple",
-             "--extra-index-url", "https://pypi.org/simple"])
+            default = next((w for w in llama_whls if "blackwell" in w.name.lower()), llama_whls[-1])
+        log(f"安装翻译推理 wheel（0.3.31 通用，RTX 50/40/30/20 全适配）: {default.name}")
+        run([str(pyexe), "-m", "pip", "install", "--no-deps", str(default)])
     else:
         log("!! 警告: _dl 下未找到 llama_cpp_python wheel，翻译功能将不可用")
 
@@ -294,9 +291,6 @@ def write_launchers() -> None:
         "echo 关闭本窗口即停止服务\r\n"
         "echo ============================\r\n"
         "echo.\r\n"
-        "echo [初始化] 校验翻译推理库是否匹配当前 GPU（首次或换卡时自动切换）...\r\n"
-        '"%~dp0runtime\\python.exe" "%~dp0wd14-tagger-web\\scripts\\init_llama_wheel.py"\r\n'
-        "echo.\r\n"
         'start "" cmd /c "timeout /t 3 >nul && start http://127.0.0.1:8000"\r\n'
         '"%~dp0runtime\\python.exe" -m uvicorn backend.main:app --host 127.0.0.1 --port 8000\r\n'
         "echo.\r\n"
@@ -416,41 +410,6 @@ def write_launchers() -> None:
     log(f"写入 {update_src_bat.name}")
 
 
-def copy_llama_wheels() -> None:
-    """把 _dl 下所有 llama_cpp_python wheel 拷进便携包，供首次启动按 GPU 架构选装。
-
-    runtime 预装的是默认 wheel（Blackwell / RTX50）；其他架构（RTX40 等）首次启动时由
-    scripts/init_llama_wheel.py 从本目录选装匹配 wheel 覆盖。_dl 本身在 EXCLUDE_DIRS，
-    不随 copy_source 进包，必须在此显式拷。每多一个 wheel ≈ +90~180MB
-    （方案 X：_dl 里只留默认 + 需适配的架构；方案 Y：全架构都留）。
-    """
-    dest = PKG_ROOT / "wd14-tagger-web" / "_llama_wheels"
-    dest.mkdir(parents=True, exist_ok=True)
-    # 清空旧 wheel：避免残留已从 _dl 移除的架构
-    for old in dest.glob("llama_cpp_python*.whl"):
-        old.unlink()
-    src_dir = SRC_ROOT / "_dl"
-    if not src_dir.is_dir():
-        log("⚠️ _dl 不存在，未拷 llama wheel（翻译多架构切换将不可用）")
-        return
-    whls = sorted(src_dir.glob("llama_cpp_python*.whl"))
-    if not whls:
-        log("⚠️ _dl 下无 llama_cpp_python wheel（翻译多架构切换将不可用）")
-        return
-    copied = []
-    for w in whls:
-        # 方案 X：Blackwell 已作为默认预装进 runtime（见 prepare_runtime），不重复拷进
-        # _llama_wheels（省 ~175MB）。如需方案 Y（全架构互切，含 Blackwell 也带上），
-        # 删掉这个 continue 即可。
-        if "blackwell" in w.name.lower():
-            log(f"  跳过（已预装进 runtime）: {w.name}")
-            continue
-        shutil.copy2(w, dest / w.name)
-        copied.append(w.name)
-        log(f"  拷翻译推理 wheel: {w.name} ({w.stat().st_size // 1024 // 1024} MB)")
-    log(f"已拷 {len(copied)} 个 wheel 到 _llama_wheels/（启动时按 GPU 自动选装）")
-
-
 def fetch_vcredist() -> None:
     """附带微软 VC++ 运行库安装包，对方缺 dll 时可装。"""
     dest = PKG_ROOT / "vc_redist.x64.exe"
@@ -477,7 +436,6 @@ def main() -> None:
 
     prepare_runtime(force=args.force_runtime)
     copy_source()
-    copy_llama_wheels()
     write_launchers()
     if not args.no_vcredist:
         fetch_vcredist()

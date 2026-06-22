@@ -121,15 +121,15 @@ class HyTranslator:
                              n_ctx=4096, verbose=False)
         except Exception as e:
             msg = str(e).lower()
-            # 0xC000001D / illegal instruction：wheel 架构与 GPU 不匹配（如 Blackwell
-            # wheel 跑在 RTX 40 上）。此时 CPU 回退也会崩（同一坏 ggml-cuda.dll），直接抛
-            # 友好提示而非裸 500。正常情况启动时 init_llama_wheel.py 已装对 wheel，不会走到这。
+            # 0xC000001D / illegal instruction：推理库与 GPU 架构不匹配。预装的 0.3.31 通用
+            # wheel 应已覆盖 RTX 50/40/30/20；走到这里通常是 wheel 损坏或被换成不兼容版本。
+            # 此时 CPU 回退也会崩（同一坏 ggml-cuda.dll），直接抛友好提示而非裸 500。
             if any(k in msg for k in ("0xc000001d", "illegal instruction",
                                       "status_illegal_instruction", "-1073741795")):
                 raise RuntimeError(
                     "翻译推理库与显卡架构不匹配（非法指令 0xC000001D）。"
-                    "请重启整合包——启动时会自动检测 GPU 并安装匹配的推理库；"
-                    "若仍失败，请联系作者获取对应架构 wheel。"
+                    "请用补丁目录下的「修复翻译.bat」重装通用推理库"
+                    "（内置 RTX 50/40/30/20 全架构内核）；仍失败请联系作者。"
                 ) from e
             logger.warning("HyTranslator GPU 加载失败（%s），回退 CPU", e)
             try:
@@ -138,7 +138,7 @@ class HyTranslator:
             except Exception as e2:
                 raise RuntimeError(
                     f"翻译推理库加载失败（GPU: {e}; CPU 回退: {e2}）。"
-                    "可能是推理库与显卡架构不匹配，请重启整合包（启动时自动检测适配）。"
+                    "可能是推理库损坏或不兼容，请用补丁目录下的「修复翻译.bat」重装。"
                 ) from e2
         logger.info("HyTranslator 已加载: %s", gguf)
 
