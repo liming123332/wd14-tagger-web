@@ -8,7 +8,7 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-dist
+# dist 不忽略：纳入根仓库 git，整合包 git 更新时同步前端（用户无 node 无法 build）
 dist-ssr
 *.local
 

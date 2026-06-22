@@ -3,7 +3,7 @@ __pycache__/
 .venv/
 .pytest_cache/
 node_modules/
-frontend/dist/
+# frontend/dist/ 不忽略：纳入 git，整合包 git 更新时同步前端（用户无 node 无法 build）
 models/
 data/
 *.part
