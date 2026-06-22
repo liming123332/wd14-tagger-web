@@ -79,6 +79,13 @@ function onDrop(e: DragEvent) {
     msg.info(`本分类已存在：${tag}`)
   }
 }
+// dragleave 在子元素间移动时也会误触发（标题↔标签↔缝隙），导致 dragging/高亮闪烁 + drop 接不住。
+// 只有鼠标真的离开整个 cat-panel（relatedTarget 不在框内）才取消高亮。
+function onDragLeave(e: DragEvent) {
+  const rt = e.relatedTarget as Node | null
+  if (rt && (e.currentTarget as HTMLElement).contains(rt)) return
+  dragging.value = false
+}
 
 // 复制该分类当前提示词：tags 模式取标签逗号拼接，phrase 模式取短句文本
 async function copyCurrent() {
@@ -102,8 +109,8 @@ async function translateCat() {
 </script>
 
 <template>
-  <div class="cat-panel" :style="{ borderColor: color }" @dragover.prevent="dragging = true"
-       @dragleave.prevent="dragging = false" @drop.prevent="onDrop">
+  <div class="cat-panel" :class="{ 'drop-active': dragging }" :style="{ borderColor: color }"
+       @dragover.prevent="dragging = true" @dragleave.prevent="onDragLeave" @drop.prevent="onDrop">
     <div class="cat-title" :style="{ background: color }">{{ title }}</div>
     <div class="cat-body">
       <!-- 🔒 锁定标签：来自权威数据（角色 trigger+core_tags / 画师 tag），只读不可增删/拖拽 -->
@@ -147,11 +154,13 @@ async function translateCat() {
 </template>
 
 <style scoped>
-.cat-panel { border-left: 4px solid #888; border-radius: 6px; overflow: hidden; margin-bottom: 10px; background: var(--cat-panel-bg, #fafafa); }
+.cat-panel { border-left: 4px solid #888; border-radius: 6px; overflow: hidden; margin-bottom: 4px; background: var(--cat-panel-bg, #fafafa); transition: box-shadow .1s, background .1s; }
+/* 拖拽悬停高亮：整框绿色虚线 + 浅绿底，明确当前释放目标，减少「松手落在框间缝隙」导致的失败 */
+.cat-panel.drop-active { outline: 2px dashed #18a058; outline-offset: -3px; background: rgba(24,160,88,.10); }
 .cat-title { color: #fff; font-weight: 600; padding: 4px 10px; }
 .cat-body { padding: 8px 10px; position: relative; }
 .phrase-box { width: 100%; resize: vertical; font-family: inherit; background: var(--cat-input-bg, #fff); color: var(--cat-input-color, inherit); }
-.drop-hint { position: absolute; inset: 0; background: rgba(0,128,0,.12); display:flex;align-items:center;justify-content:center; }
+.drop-hint { position: absolute; inset: 0; background: rgba(0,128,0,.12); display:flex;align-items:center;justify-content:center; pointer-events: none; }
 .locked-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px }
 /* 可拖标签：外层 span（native draggable，naive-ui NTag 不 fallthrough draggable 到根 div） */
 .tag-drag { display: inline-block; cursor: grab }
