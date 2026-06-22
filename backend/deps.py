@@ -68,6 +68,28 @@ def _release_taggers() -> list[str]:
     return released
 
 
+# === 翻译模型（Hy-MT2，GGUF + llama-cpp-python 进程内推理）===
+# 单例管理：get_translator 懒加载，release_translator 卸载释放显存（不删文件）。
+# 与 tagger 的 _tagger_cache 不同：翻译模型全局唯一（不分 key），用模块级变量管理。
+_translator_singleton = None
+
+
+def get_translator():
+    global _translator_singleton
+    if _translator_singleton is None:
+        from backend.translate.translator import HyTranslator
+        _translator_singleton = HyTranslator()
+    return _translator_singleton
+
+
+def release_translator() -> None:
+    """卸载翻译模型 Llama 实例（显存/RAM），清单例；下次 get_translator 重新 lazy-load。不删 GGUF。"""
+    global _translator_singleton
+    if _translator_singleton is not None:
+        _translator_singleton.unload()
+        _translator_singleton = None
+
+
 # === Character Finder ===
 @lru_cache
 def get_character_db():

@@ -2,8 +2,11 @@
 import { ref, onMounted } from 'vue'
 import { NCard, NSpace, NInput, NButton, useMessage } from 'naive-ui'
 import { getAnimaToken, setAnimaToken } from '../api/characterfinder'
+import { useTranslator } from '../composables/useTranslator'
 
 const msg = useMessage()
+const translator = useTranslator()
+const unloadingT = ref(false)
 const rulesYaml = ref('')
 const qualityTags = ref('')
 const tokenStatus = ref<{ configured: boolean; preview: string | null }>({ configured: false, preview: null })
@@ -18,6 +21,7 @@ async function load() {
     qualityTags.value = (q.tags || []).join(', ')
     tokenStatus.value = await getAnimaToken()
   } catch (e: any) { msg.error('加载配置失败：' + e.message) }
+  translator.refreshStatus()  // 翻译模型下载/加载状态（不阻塞主配置加载）
 }
 onMounted(load)
 
@@ -43,10 +47,37 @@ async function saveQuality() {
     msg.success('质量词已保存（新反推生效）')
   } catch (e: any) { msg.error('保存失败：' + e.message) }
 }
+
+// 翻译模型：手动下载 / 卸载（首次翻译时也会自动触发下载，这里给一个集中入口）
+async function doDlTranslate() {
+  try { await translator.download(); msg.success('翻译模型下载完成') }
+  catch (e: any) { msg.error('下载失败：' + e.message) }
+}
+async function onUnloadT() {
+  unloadingT.value = true
+  try { await translator.unload(); msg.success('已释放翻译模型（下次翻译重新加载）') }
+  catch (e: any) { msg.error('卸载失败：' + e.message) }
+  finally { unloadingT.value = false }
+}
 </script>
 
 <template>
   <n-space vertical>
+    <n-card title="翻译模型（Hy-MT2 1.8B）">
+      <div v-if="translator.state.downloaded" style="font-size:13px;color:#18a058;margin-bottom:8px">
+        ✓ 已下载<span v-if="translator.state.loaded">（已加载，可直接翻译）</span> —— 各详情页分类点「翻译本分类」查看中文释义
+      </div>
+      <div v-else style="font-size:13px;color:#d03050;margin-bottom:8px">
+        未下载（GGUF ~0.7GB），首次点「翻译本分类」时自动下载，也可在此手动下载
+      </div>
+      <n-space>
+        <n-button v-if="!translator.state.downloaded" type="primary" :loading="translator.state.downloading" @click="doDlTranslate">下载翻译模型</n-button>
+        <n-button v-if="translator.state.loaded" :loading="unloadingT" @click="onUnloadT">卸载（释放显存/内存）</n-button>
+      </n-space>
+      <div style="font-size:12px;color:#888;margin-top:6px;line-height:1.6">
+        腾讯 Hy-MT2-1.8B 多语言翻译模型，本地 GPU 推理（Blackwell CUDA）；翻译结果不存储，每次现译。
+      </div>
+    </n-card>
     <n-card title="Anima 数据更新 token">
       <div v-if="tokenStatus.configured" style="margin-bottom:8px;font-size:13px;color:#888">
         当前已配置：<code>{{ tokenStatus.preview }}</code>

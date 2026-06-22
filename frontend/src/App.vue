@@ -10,6 +10,7 @@ import BatchBadge from './components/BatchBadge.vue'
 import { lightOverrides, darkOverrides } from './styles/theme'
 import { useTheme } from './composables/useTheme'
 import { useTagger } from './composables/useTagger'
+import { useTranslator } from './composables/useTranslator'
 import {
   IconUpload, IconGallery, IconRandom, IconStar, IconEdit, IconSettings,
   IconSun, IconMoon, IconMonitor, IconFolderTag, IconCharacter, IconArtist, IconBookmark,
@@ -19,23 +20,32 @@ const router = useRouter()
 const route = useRoute()
 const { mode, effective, setMode } = useTheme()
 const tagger = useTagger()
+const translator = useTranslator()
 
-// 下载进度浮层文本/百分比（来自 useTagger 轮询的后端 _state）
+// 下载进度浮层：tagger / translator 任意在下载即显示。
+// _download_util 为单任务模型（同时只有一个下载），故取当前活跃者的 progress 即可。
 function human(n: number): string {
   if (n < 1024) return n + 'B'
   let v = n / 1024; let i = 0
   for (const u of ['KB', 'MB', 'GB']) { if (v < 1024 || i === 2) return v.toFixed(1) + u; v /= 1024; i++ }
   return v.toFixed(1) + 'TB'
 }
+const downloading = computed(() => !!(tagger.state.downloading || translator.state.downloading))
+const downloadingLabel = computed(() => tagger.state.downloading || (translator.state.downloading ? '翻译模型' : ''))
+const activeProgress = computed(() =>
+  tagger.state.downloading ? tagger.state.progress
+  : translator.state.downloading ? translator.state.progress
+  : null
+)
 const progressText = computed(() => {
-  const p = tagger.state.progress
+  const p = activeProgress.value
   if (!p) return '准备下载…'
   const pct = p.size ? Math.round(p.downloaded * 100 / p.size) : 0
   const sz = p.size ? `${human(p.downloaded)} / ${human(p.size)}` : human(p.downloaded)
   return `${p.file || '…'} · ${sz} · ${pct}% · 文件 ${p.index + 1}/${p.total_files}`
 })
 const progressPct = computed(() => {
-  const p = tagger.state.progress
+  const p = activeProgress.value
   if (!p || !p.size) return 0
   return Math.min(100, Math.round(p.downloaded * 100 / p.size))
 })
@@ -119,9 +129,9 @@ function cycleTheme() {
           </n-layout-content>
         </n-layout>
         <!-- 全局下载进度浮层（任意页面点下载都显示） -->
-        <div v-if="tagger.state.downloading" class="dl-bar">
+        <div v-if="downloading" class="dl-bar">
           <div class="dl-head">
-            <span class="dl-title">下载模型 {{ tagger.state.downloading }}</span>
+            <span class="dl-title">下载模型 {{ downloadingLabel }}</span>
             <span class="dl-text">{{ progressText }}</span>
           </div>
           <div class="dl-track"><div class="dl-fill" :style="{ width: progressPct + '%' }"></div></div>

@@ -285,3 +285,54 @@ export async function reclassifyPromptbox(id: string, keep: Record<string, strin
   }).then(r => r.json())
 }
 
+// === 翻译（Hy-MT2，本地 GGUF 推理，不落地，每次现译）===
+export async function translateStatus(): Promise<{ downloaded: boolean; loaded: boolean }> {
+  return fetch(`${base}/api/translate/status`).then(r => r.json())
+}
+
+// 下载翻译模型：ensure_loaded 补全 GGUF + 加载；进度复用 getDownloadProgress（同 tagger）
+export async function downloadTranslator(): Promise<{ downloaded: boolean }> {
+  const r = await fetch(`${base}/api/translate/download`, { method: 'POST' })
+  if (!r.ok) {
+    let detail = ''
+    try { detail = (await r.json()).detail || '' } catch { detail = await r.text() }
+    throw new Error(detail || `HTTP ${r.status}`)
+  }
+  return r.json()
+}
+
+// 翻译一批标签（英文→中文）。409=未下载，前端编排先下载再重试
+export async function translateTags(texts: string[], target?: string): Promise<{ results: string[] }> {
+  const r = await fetch(`${base}/api/translate`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ texts, target }),
+  })
+  if (!r.ok) {
+    let detail = ''
+    try { detail = (await r.json()).detail || '' } catch { detail = await r.text() }
+    throw new Error(detail || `HTTP ${r.status}`)
+  }
+  return r.json()
+}
+
+// 中文→英文标签（详情页中文添加用）：双马尾→twintails。409=未下载
+export async function translateToTags(texts: string[]): Promise<{ results: string[] }> {
+  const r = await fetch(`${base}/api/translate/to-tags`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ texts }),
+  })
+  if (!r.ok) {
+    let detail = ''
+    try { detail = (await r.json()).detail || '' } catch { detail = await r.text() }
+    throw new Error(detail || `HTTP ${r.status}`)
+  }
+  return r.json()
+}
+
+// 卸载翻译模型 Llama（释放显存/RAM，不删 GGUF）
+export async function unloadTranslator(): Promise<{ released: boolean }> {
+  const r = await fetch(`${base}/api/translate/unload`, { method: 'POST' })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+

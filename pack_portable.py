@@ -127,10 +127,24 @@ def prepare_runtime(force: bool) -> None:
         log(f"  复用已下载 wheel: {dl_dir}")
     run(install_cmd)
 
+    # 4b. 翻译模型推理 wheel：llama-cpp-python Blackwell CUDA 预编译包。
+    #     清华/PyPI 均无 win 预编译包（只有 sdist，本机无 MSVC 会编译失败），必须用 _dl 本地 wheel。
+    #     glob 兼容未来版本号变更；缺失则警告（翻译功能不可用，不影响 tagger 主流程）。
+    llama_whls = sorted((SRC_ROOT / "_dl").glob("llama_cpp_python*.whl"))
+    if llama_whls:
+        log(f"安装翻译推理 wheel: {llama_whls[-1].name}")
+        run([str(pyexe), "-m", "pip", "install", str(llama_whls[-1]),
+             "-i", "https://pypi.tuna.tsinghua.edu.cn/simple",
+             "--extra-index-url", "https://pypi.org/simple"])
+    else:
+        log("!! 警告: _dl 下未找到 llama_cpp_python wheel，翻译功能将不可用")
+
     # 5. 验证关键依赖可 import
     run([str(pyexe), "-c",
          "import onnxruntime, fastapi, uvicorn, numpy, PIL, yaml, multipart, pydantic; "
-         "print('runtime deps OK, onnxruntime', onnxruntime.__version__)"])
+         "import llama_cpp; "
+         "print('runtime deps OK, onnxruntime', onnxruntime.__version__, "
+         "'llama_cpp', llama_cpp.__version__)"])
     log("runtime 就绪")
 
 
