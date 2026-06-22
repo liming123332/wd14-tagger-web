@@ -19,7 +19,9 @@ WD14 Tagger Web 便携整合包打包脚本（可重复执行）
 """
 from __future__ import annotations
 import argparse
+import os
 import shutil
+import stat
 import subprocess
 import sys
 import urllib.request
@@ -183,11 +185,22 @@ def _warn_if_dist_stale() -> None:
         log("    整合包将使用旧的前端 dist。请先执行: cd frontend && npm run build，再重跑本脚本。")
 
 
+def _remove_readonly(func, path, exc):
+    """shutil.rmtree onexc 回调：Windows 上 .git/objects 等文件默认只读，
+    裸 rmtree 删到它们会 PermissionError（[WinError 5] 拒绝访问）。改可写后重删。
+    .git 随源码进整合包（支持「更新源码.bat」），故 dest 必含只读 git object。"""
+    try:
+        os.chmod(path, stat.S_IWRITE)
+        func(path)
+    except Exception:
+        pass  # 仍不可删则交回上层
+
+
 def copy_source() -> None:
     _warn_if_dist_stale()
     dest = PKG_ROOT / "wd14-tagger-web"
     if dest.exists():
-        shutil.rmtree(dest)
+        shutil.rmtree(dest, onexc=_remove_readonly)
     log(f"拷贝源码 {SRC_ROOT} -> {dest}（排除 .venv/node_modules/_dl 等；.git 随源码进包，支持整合包 git 更新）")
     shutil.copytree(SRC_ROOT, dest, ignore=_ignore_when_copy)
 
