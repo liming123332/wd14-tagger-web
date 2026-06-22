@@ -63,10 +63,21 @@ function removeTag(i: number) {
 function onPhraseInput(e: any) { patch({ phrase: e.target.value, user_edited: true }) }
 function applyPhrase() { emit('applyPhrase', parsePhrase(props.modelValue.phrase)) }
 
+// 拖拽标签：写双 MIME（text/tag 自定义 + text/plain 标准），onDrop 读到后复制到本分类（不移除原标签）
+function onDragStart(e: DragEvent, t: string) {
+  e.dataTransfer?.setData('text/tag', t)
+  e.dataTransfer?.setData('text/plain', t)
+}
 function onDrop(e: DragEvent) {
   dragging.value = false
-  const tag = e.dataTransfer?.getData('text/tag'); if (!tag) return
-  if (!props.modelValue.tags.includes(tag)) patch({ tags: [...props.modelValue.tags, tag], user_edited: true })
+  const tag = e.dataTransfer?.getData('text/tag') || e.dataTransfer?.getData('text/plain') || ''
+  if (!tag) return
+  if (!props.modelValue.tags.includes(tag)) {
+    patch({ tags: [...props.modelValue.tags, tag], user_edited: true })
+    msg.success(`已复制到本分类：${tag}`)
+  } else {
+    msg.info(`本分类已存在：${tag}`)
+  }
 }
 
 // 复制该分类当前提示词：tags 模式取标签逗号拼接，phrase 模式取短句文本
@@ -103,10 +114,12 @@ async function translateCat() {
       </div>
       <template v-if="mode === 'tags'">
         <n-space size="small">
-          <n-tag v-for="(t, i) in modelValue.tags" :key="t + i" closable @dragstart="($event as any).dataTransfer.setData('text/tag', t)"
-                 @close="removeTag(i)">
-            <span class="tag-inner"><span>{{ t.replaceAll('_', ' ') }}</span><span v-if="translator.translations[t]" class="tag-zh">{{ translator.translations[t] }}</span></span>
-          </n-tag>
+          <span v-for="(t, i) in modelValue.tags" :key="t + i" class="tag-drag" draggable="true"
+                @dragstart="onDragStart($event as any, t)">
+            <n-tag closable @close="removeTag(i)">
+              <span class="tag-inner"><span>{{ t.replaceAll('_', ' ') }}</span><span v-if="translator.translations[t]" class="tag-zh">{{ translator.translations[t] }}</span></span>
+            </n-tag>
+          </span>
         </n-space>
         <n-space style="margin-top:6px">
           <n-input v-model:value="newTag" size="small" placeholder="添加标签（中文自动转标签）" :loading="adding" @keyup.enter="addTag" style="width:160px" />
@@ -140,6 +153,9 @@ async function translateCat() {
 .phrase-box { width: 100%; resize: vertical; font-family: inherit; background: var(--cat-input-bg, #fff); color: var(--cat-input-color, inherit); }
 .drop-hint { position: absolute; inset: 0; background: rgba(0,128,0,.12); display:flex;align-items:center;justify-content:center; }
 .locked-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px }
+/* 可拖标签：外层 span（native draggable，naive-ui NTag 不 fallthrough draggable 到根 div） */
+.tag-drag { display: inline-block; cursor: grab }
+.tag-drag:active { cursor: grabbing }
 /* n-tag 内部两行：英文标签 + 中文释义小字（翻译后原位显示，来自 translator.translations 缓存） */
 .tag-inner { display: flex; flex-direction: column; line-height: 1.2 }
 .tag-zh { font-size: 11px; color: var(--n-text-color-3, #999); margin-top: 1px }
