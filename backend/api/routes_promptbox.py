@@ -99,24 +99,6 @@ def analyze(
     return {"items": items}
 
 
-@router.post("/workspace/image")
-def upload_workspace_image(files: list[UploadFile] = File(...)):
-    """只存图到 workspace、不反推：供「粘贴拆分（可附图）」给自写提示词附图用。
-    复用 save_workspace_image；不调 tagger/classifier。"""
-    store = get_promptbox_store()
-    out = []
-    for f in files:
-        try:
-            pil = Image.open(f.file)
-            pil.load()
-        except (UnidentifiedImageError, OSError) as e:
-            raise HTTPException(status_code=400, detail=f"bad image {f.filename}: {e}")
-        local_id = store.new_id()
-        orig, thumb, w, h = store.save_workspace_image(local_id, pil, f.filename or "img.png")
-        out.append({"local_id": local_id, "original": orig, "thumb": thumb, "width": w, "height": h})
-    return {"items": out}
-
-
 @router.get("/workspace/{local_id}/image/{name}")
 def get_workspace_image(local_id: str, name: str):
     store = get_promptbox_store()

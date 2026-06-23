@@ -89,49 +89,37 @@ describe('PromptBoxPage 工作台', () => {
     expect(seen[0].get('model')).toBe('wd3')
   })
 
-  it('粘贴+附图：调 workspace/image + split，产带图项', async () => {
+  it('粘贴提示词覆盖：拆分后覆盖当前选中项的分类+raw_prompt', async () => {
     const calls: string[] = []
     vi.stubGlobal('fetch', vi.fn(async (url: string) => {
       calls.push(url)
-      if (url === '/api/promptbox/workspace/image') {
+      if (url === '/api/promptbox/analyze') {
         return { ok: true, json: async () => ({ items: [{
-          local_id: 'ws9', original: 'original.png', thumb: 'thumb.webp', width: 10, height: 10,
+          local_id: 'ws1', original: 'o.png', thumb: 't.webp', width: 10, height: 10, model: 'wd14',
+          categories: { head: ['old tag'] }, extras: [], raw_prompt: 'old tag', raw_tags: {},
         }] }) } as any
       }
       if (url === '/api/promptbox/split') {
-        return { ok: true, json: async () => ({ categories: { head: ['long hair'] }, extras: [] }) } as any
+        return { ok: true, json: async () => ({ categories: { head: ['new hair'], clothing: ['dress'] }, extras: ['weird'] }) } as any
       }
-      return { ok: true, json: async () => ({ items: [] }) } as any
+      return { ok: true, json: async () => ({}) } as any
     }))
     const w = mount(PromptBoxPage, { global: { stubs: { NMenu: true } } })
     await flushPromises()
-    ;(w.vm as any).pasteTextImg = 'long hair'
-    ;(w.vm as any).pasteFile = new File(['x'], 'a.png')
-    await (w.vm as any).doPasteSplitWithImage()
+    // 先反推一项（成为选中项），其分类为 old tag
+    await (w.vm as any).doAnalyze([new File(['x'], 'a.png')])
     await flushPromises()
-    expect(calls).toContain('/api/promptbox/workspace/image')
-    expect(calls).toContain('/api/promptbox/split')
-    // 新建带图项被选中 → 拆分编辑区显示其分类标签
-    expect(w.text()).toContain('long hair')
-  })
-
-  it('粘贴不附图：仅 split，不调 workspace/image', async () => {
-    const calls: string[] = []
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-      calls.push(url)
-      if (url === '/api/promptbox/split') {
-        return { ok: true, json: async () => ({ categories: { head: ['cat'] }, extras: [] }) } as any
-      }
-      return { ok: true, json: async () => ({ items: [] }) } as any
-    }))
-    const w = mount(PromptBoxPage, { global: { stubs: { NMenu: true } } })
-    await flushPromises()
-    ;(w.vm as any).pasteTextImg = 'cat'
-    ;(w.vm as any).pasteFile = null
-    await (w.vm as any).doPasteSplitWithImage()
+    const it = (w.vm as any).items[0]
+    expect(it.categories.head).toEqual(['old tag'])
+    // 粘贴覆盖：拆分后覆盖当前选中项的分类 + extras + raw_prompt
+    ;(w.vm as any).pasteOverrideText = 'new hair, dress, weird'
+    await (w.vm as any).doPasteOverride()
     await flushPromises()
     expect(calls).toContain('/api/promptbox/split')
-    expect(calls.some(u => u === '/api/promptbox/workspace/image')).toBe(false)
-    expect(w.text()).toContain('cat')
+    expect(it.categories.head).toEqual(['new hair'])
+    expect(it.categories.clothing).toEqual(['dress'])
+    expect(it.extras).toEqual(['weird'])
+    expect(it.raw_prompt).toBe('new hair, dress, weird')
+    expect(it.categories.scene).toEqual([])  // emptyCats 兜底：未命中的类为空数组
   })
 })

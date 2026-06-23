@@ -269,20 +269,6 @@ export function promptboxWorkspaceImageUrl(localId: string, name: string) {
   return `${base}/api/promptbox/workspace/${localId}/image/${name}`
 }
 
-export interface WorkspaceImageInfo {
-  local_id: string; original: string; thumb: string; width: number; height: number
-}
-// 提示词收藏「粘贴拆分（可附图）」：只把图存到 workspace（不反推），返回 local_id/原图/缩略图。
-export async function uploadPromptboxWorkspaceImage(
-  files: File[],
-): Promise<{ items: WorkspaceImageInfo[] }> {
-  const fd = new FormData()
-  for (const f of files) fd.append('files', f)
-  const r = await fetch(`${base}/api/promptbox/workspace/image`, { method: 'POST', body: fd })
-  if (!r.ok) throw new Error(await r.text())
-  return r.json()
-}
-
 // 收藏编辑页「重新反推」：读收藏示例图反推，返回更新后的 item（含新 raw_tags/categories）
 export async function tagPromptbox(id: string, gen_th = 0.35, char_th = 0.9, model = 'wd14') {
   return fetch(`${base}/api/promptbox/${id}/tag`, {
