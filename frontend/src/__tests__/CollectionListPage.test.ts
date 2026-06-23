@@ -140,4 +140,20 @@ describe('CollectionListPage', () => {
     await flushPromises()
     expect(w.findComponent({ name: 'Pagination' }).exists()).toBe(false)
   })
+
+  it('按 created_at 倒序：新增的排最前', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url === '/api/promptbox') return { ok: true, json: async () => [
+        { id: 'old', title: '旧收藏', raw_prompt: 'a', categories: {}, extras: [], image_names: [], created_at: '2026-06-01T10:00:00+08:00', updated_at: '' },
+        { id: 'mid', title: '中收藏', raw_prompt: 'b', categories: {}, extras: [], image_names: [], created_at: '2026-06-02T10:00:00+08:00', updated_at: '' },
+        { id: 'new', title: '新收藏', raw_prompt: 'c', categories: {}, extras: [], image_names: [], created_at: '2026-06-03T10:00:00+08:00', updated_at: '' },
+      ] } as any
+      return { ok: true, json: async () => ({}) } as any
+    }))
+    const w = mount(CollectionListPage, { global: { stubs: { NMenu: true } } })
+    await flushPromises()
+    // 卡片 .title 按 DOM 顺序 = paged 顺序 = filtered 倒序
+    const titles = w.findAll('.title').map(e => e.text())
+    expect(titles).toEqual(['新收藏', '中收藏', '旧收藏'])
+  })
 })

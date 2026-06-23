@@ -27,11 +27,13 @@ onMounted(load)
 // 前端子串过滤（收藏量级小，无需后端分页/防抖）：标题或 raw_prompt 命中即保留
 const filtered = computed(() => {
   const k = keyword.value.trim().toLowerCase()
-  if (!k) return items.value
-  return items.value.filter(it =>
-    (it.title || '').toLowerCase().includes(k) ||
-    (it.raw_prompt || '').toLowerCase().includes(k),
-  )
+  const base = k
+    ? items.value.filter(it =>
+        (it.title || '').toLowerCase().includes(k) ||
+        (it.raw_prompt || '').toLowerCase().includes(k))
+    : items.value
+  // 新增在前：created_at 倒序（ISO 字符串 localeCompare 倒序 = 时间倒序）
+  return [...base].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
 })
 
 // 分页：filtered 全量在内存，前端切片（收藏量级小，无需后端分页）
