@@ -293,9 +293,9 @@ function removeItem(idx: number) {
       <n-card title="粘贴拆分（可附图）" class="paste-card">
         <n-input v-model:value="pasteTextImg" type="textarea" :rows="5"
                  placeholder="粘贴自己写好的提示词，逗号或换行分隔" />
-        <n-upload multiple :default-upload="false" :show-file-list="false"
+        <n-upload :default-upload="false" :show-file-list="false"
                   v-model:file-list="pasteFileList" @change="onPasteFileChange" accept="image/*">
-          <n-button size="small">选择附图（可选）</n-button>
+          <n-button size="small">选择附图（可选，单张）</n-button>
         </n-upload>
         <span v-if="pasteFileName" class="paste-file-name">{{ pasteFileName }}</span>
         <n-button :loading="splitting" type="primary" @click="doPasteSplitWithImage">粘贴拆分</n-button>
