@@ -56,7 +56,7 @@ async function shuffle() {
 }
 onMounted(shuffle)
 
-function onSource(v: 'gallery' | 'characters' | 'artists') {
+function onSource(v: 'gallery' | 'characters' | 'artists' | 'promptbox') {
   source.value = v
   // 立即清空旧 items：避免「source 已变、items 尚未异步替换」的中间帧拿旧数据
   // （图库 item 无 entry_key）走 v-else 渲染 cardTo→parseEntryKey(undefined) 崩溃

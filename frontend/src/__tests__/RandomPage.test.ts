@@ -19,7 +19,7 @@ vi.mock('../api/client', async () => {
     randomImages: vi.fn(async () => {
       // 真实图库 item 结构（见 api/client.ts 的 randomImages）：{id, source_name, tags, ...}，
       // 【没有 entry_key】。故意不伪造 entry_key——切源瞬间 source 已变、items 仍是图库 item
-      // 的那一帧，若代码未防御，cardTo→parseEntryKey(undefined) 会在”切源不崩”用例里暴露崩溃。
+      // 的那一帧，若代码未防御，cardTo→parseEntryKey(undefined) 会在"切源不崩"用例里暴露崩溃。
       calls.push('randomImages'); return { items: [{ id: 'g1', source_name: 'g', tags: [] }] }
     }),
     listPromptbox: vi.fn(async () => {
