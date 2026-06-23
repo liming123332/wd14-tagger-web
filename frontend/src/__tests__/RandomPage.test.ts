@@ -19,8 +19,15 @@ vi.mock('../api/client', async () => {
     randomImages: vi.fn(async () => {
       // 真实图库 item 结构（见 api/client.ts 的 randomImages）：{id, source_name, tags, ...}，
       // 【没有 entry_key】。故意不伪造 entry_key——切源瞬间 source 已变、items 仍是图库 item
-      // 的那一帧，若代码未防御，cardTo→parseEntryKey(undefined) 会在“切源不崩”用例里暴露崩溃。
+      // 的那一帧，若代码未防御，cardTo→parseEntryKey(undefined) 会在”切源不崩”用例里暴露崩溃。
       calls.push('randomImages'); return { items: [{ id: 'g1', source_name: 'g', tags: [] }] }
+    }),
+    listPromptbox: vi.fn(async () => {
+      calls.push('listPromptbox')
+      return [
+        { id: 'p1', title: '收藏甲', raw_prompt: 'a, b', categories: {}, extras: [], image_names: [], created_at: '', updated_at: '' },
+        { id: 'p2', title: '收藏乙', raw_prompt: 'c, d', categories: {}, extras: [], image_names: [], created_at: '', updated_at: '' },
+      ]
     }),
   }
 })
@@ -86,5 +93,33 @@ describe('RandomPage 源切换', () => {
     await selects[0].vm.$emit('update:value', 'characters')
     await flushPromises()
     expect(calls.some(c => c === 'randomCf:characters:anima')).toBe(true)
+  })
+
+  it('切到 promptbox 调 listPromptbox，不调 randomImages/randomCf', async () => {
+    const w = mount(RandomPage); await flushPromises()
+    calls.length = 0
+    const selects = w.findAllComponents({ name: 'Select' })
+    await selects[0].vm.$emit('update:value', 'promptbox')
+    await flushPromises()
+    expect(calls).toContain('listPromptbox')
+    expect(calls.some(c => c === 'randomImages')).toBe(false)
+    expect(calls.some(c => c.startsWith('randomCf:'))).toBe(false)
+  })
+
+  it('promptbox 来源渲染收藏卡片标题', async () => {
+    const w = mount(RandomPage); await flushPromises()
+    const selects = w.findAllComponents({ name: 'Select' })
+    await selects[0].vm.$emit('update:value', 'promptbox')
+    await flushPromises()
+    expect(w.text()).toContain('收藏甲')
+    expect(w.text()).toContain('收藏乙')
+  })
+
+  it('promptbox 切源不崩（竞态：source 已变、items 异步替换的中间帧）', async () => {
+    const w = mount(RandomPage); await flushPromises()
+    const selects = w.findAllComponents({ name: 'Select' })
+    await selects[0].vm.$emit('update:value', 'promptbox')
+    await flushPromises()
+    expect(calls.some(c => c === 'listPromptbox')).toBe(true)
   })
 })
