@@ -6,6 +6,7 @@ import {
 } from 'naive-ui'
 import {
   splitPrompt, analyzePromptbox, savePromptbox, promptboxWorkspaceImageUrl,
+  uploadPromptboxWorkspaceImage,
 } from '../api/client'
 import { useTagger } from '../composables/useTagger'
 import { useImagePasteDrop } from '../composables/useImagePasteDrop'
@@ -130,6 +131,43 @@ async function doPasteSplit() {
   finally { splitting.value = false }
 }
 
+// 粘贴拆分（可附图）：独立于顶部 doPasteSplit（无图），这里可附图产带图项（不反推）
+const pasteTextImg = ref('')
+const pasteFile = ref<File | null>(null)
+const pasteFileList = ref<any[]>([])
+const pasteFileName = computed(() => pasteFile.value?.name || '')
+
+function onPasteFileChange(opts: any) {
+  const f = (opts.fileList || []).map((x: any) => x.file).filter(Boolean)[0] || null
+  pasteFile.value = f
+}
+
+async function doPasteSplitWithImage() {
+  const text = pasteTextImg.value.trim()
+  if (!text) { msg.warning('请先输入提示词'); return }
+  splitting.value = true
+  try {
+    let local_id = '', original = '', thumb = ''
+    if (pasteFile.value) {
+      const up = await uploadPromptboxWorkspaceImage([pasteFile.value])
+      const m = up.items[0]
+      local_id = m.local_id; original = m.original; thumb = m.thumb
+    }
+    const res = await splitPrompt(text)
+    items.value = [...items.value, {
+      local_id, original, thumb,
+      categories: { ...emptyCats(), ...res.categories },
+      extras: [...res.extras], raw_prompt: text,
+    }]
+    selectedIdx.value = items.value.length - 1
+    pasteTextImg.value = ''
+    pasteFile.value = null
+    pasteFileList.value = []
+    msg.success(local_id ? '已拆分（含图）' : '已拆分')
+  } catch (e: any) { msg.error('拆分失败：' + e.message) }
+  finally { splitting.value = false }
+}
+
 // 选中项分类编辑（直接改 items[idx]，ref 深度响应式）
 function setCat(key: string, val: string[]) {
   const it = items.value[selectedIdx.value]
@@ -250,23 +288,35 @@ function removeItem(idx: number) {
     </div>
     <n-empty v-else description="上传图片反推，或粘贴提示词拆分" />
 
-    <!-- 选中项拆分编辑 -->
-    <n-card v-if="selected" title="拆分编辑（选中项）">
-      <div v-for="k in [...ORDER, 'extras']" :key="k" style="margin-top:8px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
-          <span style="font-size:13px">{{ TITLES[k] }}</span>
-          <n-button size="tiny" @click="copyCat(k)">复制当前分类</n-button>
+    <!-- 粘贴拆分（可附图） + 拆分编辑（选中项） 同一行 -->
+    <div class="edit-row">
+      <n-card title="粘贴拆分（可附图）" class="paste-card">
+        <n-input v-model:value="pasteTextImg" type="textarea" :rows="5"
+                 placeholder="粘贴自己写好的提示词，逗号或换行分隔" />
+        <n-upload multiple :default-upload="false" :show-file-list="false"
+                  v-model:file-list="pasteFileList" @change="onPasteFileChange" accept="image/*">
+          <n-button size="small">选择附图（可选）</n-button>
+        </n-upload>
+        <span v-if="pasteFileName" class="paste-file-name">{{ pasteFileName }}</span>
+        <n-button :loading="splitting" type="primary" @click="doPasteSplitWithImage">粘贴拆分</n-button>
+      </n-card>
+      <n-card v-if="selected" title="拆分编辑（选中项）" class="edit-card">
+        <div v-for="k in [...ORDER, 'extras']" :key="k" style="margin-top:8px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
+            <span style="font-size:13px">{{ TITLES[k] }}</span>
+            <n-button size="tiny" @click="copyCat(k)">复制当前分类</n-button>
+          </div>
+          <n-dynamic-tags v-if="k !== 'extras'" :value="selected.categories[k] || []"
+                          @update:value="(v: string[]) => setCat(k, v)" />
+          <n-dynamic-tags v-else :value="selected.extras" @update:value="(v: string[]) => setExtras(v)" />
         </div>
-        <n-dynamic-tags v-if="k !== 'extras'" :value="selected.categories[k] || []"
-                        @update:value="(v: string[]) => setCat(k, v)" />
-        <n-dynamic-tags v-else :value="selected.extras" @update:value="(v: string[]) => setExtras(v)" />
-      </div>
-      <div style="margin-top:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <n-input v-model:value="title" placeholder="收藏标题（可选）" style="max-width:240px" />
-        <n-button size="small" @click="copyPrompt">复制完整 prompt</n-button>
-        <n-button size="small" type="primary" @click="saveAsCollection">另存为收藏</n-button>
-      </div>
-    </n-card>
+        <div style="margin-top:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <n-input v-model:value="title" placeholder="收藏标题（可选）" style="max-width:240px" />
+          <n-button size="small" @click="copyPrompt">复制完整 prompt</n-button>
+          <n-button size="small" type="primary" @click="saveAsCollection">另存为收藏</n-button>
+        </div>
+      </n-card>
+    </div>
   </n-space>
 </template>
 
@@ -286,4 +336,10 @@ function removeItem(idx: number) {
   font-size: 11px; color: var(--cat-input-color, #666); margin-top: 4px; margin-bottom: 4px;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
+.edit-row { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap }
+.paste-card { width: 300px; flex-shrink: 0 }
+.paste-card > :deep(.n-card__content) { display: flex; flex-direction: column; gap: 8px }
+.paste-file-name { font-size: 12px; color: var(--cat-input-color, #888) }
+.edit-card { flex: 1; min-width: 300px }
+@media (max-width: 760px) { .paste-card, .edit-card { width: 100%; flex: 1 1 100% } }
 </style>

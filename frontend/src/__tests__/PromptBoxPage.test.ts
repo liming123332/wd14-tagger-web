@@ -88,4 +88,50 @@ describe('PromptBoxPage 工作台', () => {
     expect(seen[0].get('raw_tags')).toBe(JSON.stringify({ 'long hair': 0.9, 'weird': 0.4 }))
     expect(seen[0].get('model')).toBe('wd3')
   })
+
+  it('粘贴+附图：调 workspace/image + split，产带图项', async () => {
+    const calls: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      calls.push(url)
+      if (url === '/api/promptbox/workspace/image') {
+        return { ok: true, json: async () => ({ items: [{
+          local_id: 'ws9', original: 'original.png', thumb: 'thumb.webp', width: 10, height: 10,
+        }] }) } as any
+      }
+      if (url === '/api/promptbox/split') {
+        return { ok: true, json: async () => ({ categories: { head: ['long hair'] }, extras: [] }) } as any
+      }
+      return { ok: true, json: async () => ({ items: [] }) } as any
+    }))
+    const w = mount(PromptBoxPage, { global: { stubs: { NMenu: true } } })
+    await flushPromises()
+    ;(w.vm as any).pasteTextImg = 'long hair'
+    ;(w.vm as any).pasteFile = new File(['x'], 'a.png')
+    await (w.vm as any).doPasteSplitWithImage()
+    await flushPromises()
+    expect(calls).toContain('/api/promptbox/workspace/image')
+    expect(calls).toContain('/api/promptbox/split')
+    // 新建带图项被选中 → 拆分编辑区显示其分类标签
+    expect(w.text()).toContain('long hair')
+  })
+
+  it('粘贴不附图：仅 split，不调 workspace/image', async () => {
+    const calls: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      calls.push(url)
+      if (url === '/api/promptbox/split') {
+        return { ok: true, json: async () => ({ categories: { head: ['cat'] }, extras: [] }) } as any
+      }
+      return { ok: true, json: async () => ({ items: [] }) } as any
+    }))
+    const w = mount(PromptBoxPage, { global: { stubs: { NMenu: true } } })
+    await flushPromises()
+    ;(w.vm as any).pasteTextImg = 'cat'
+    ;(w.vm as any).pasteFile = null
+    await (w.vm as any).doPasteSplitWithImage()
+    await flushPromises()
+    expect(calls).toContain('/api/promptbox/split')
+    expect(calls.some(u => u === '/api/promptbox/workspace/image')).toBe(false)
+    expect(w.text()).toContain('cat')
+  })
 })
