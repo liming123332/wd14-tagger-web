@@ -77,4 +77,67 @@ describe('CollectionListPage', () => {
     await w.find('.n-card:not(.filter-bar)').trigger('click')
     expect(push).toHaveBeenCalledWith('/collections/c1')
   })
+
+  it('超过 PAGE_SIZE 分页：默认第一页30条，翻页切片', async () => {
+    const items = Array.from({ length: 75 }, (_, i) => ({
+      id: `c${i}`, title: `收藏${i}`, raw_prompt: 'p', categories: {}, extras: [],
+      image_names: [], created_at: '', updated_at: '',
+    }))
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url === '/api/promptbox') return { ok: true, json: async () => items } as any
+      return { ok: true, json: async () => ({}) } as any
+    }))
+    const w = mount(CollectionListPage, { global: { stubs: { NMenu: true } } })
+    await flushPromises()
+    // 默认 page=1：渲染 c0~c29，不渲染 c30
+    expect(w.text()).toContain('收藏0')
+    expect(w.text()).toContain('收藏29')
+    expect(w.text()).not.toContain('收藏30')
+    // 切到 page=2：渲染 c30~c59
+    await w.findComponent({ name: 'Pagination' }).vm.$emit('update:page', 2)
+    await flushPromises()
+    expect(w.text()).toContain('收藏30')
+    expect(w.text()).not.toContain('收藏0')
+    // 切到 page=3：渲染 c60~c74（15条）
+    await w.findComponent({ name: 'Pagination' }).vm.$emit('update:page', 3)
+    await flushPromises()
+    expect(w.text()).toContain('收藏74')
+    expect(w.text()).not.toContain('收藏59')
+  })
+
+  it('搜索时回到第一页', async () => {
+    const items = Array.from({ length: 75 }, (_, i) => ({
+      id: `c${i}`, title: `收藏${i}`, raw_prompt: 'p', categories: {}, extras: [],
+      image_names: [], created_at: '', updated_at: '',
+    }))
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url === '/api/promptbox') return { ok: true, json: async () => items } as any
+      return { ok: true, json: async () => ({}) } as any
+    }))
+    const w = mount(CollectionListPage, { global: { stubs: { NMenu: true } } })
+    await flushPromises()
+    // 先翻到 page=2
+    await w.findComponent({ name: 'Pagination' }).vm.$emit('update:page', 2)
+    await flushPromises()
+    expect(w.text()).toContain('收藏30')
+    // 搜索框输入 → page 重置回 1
+    await w.find('input').setValue('收藏0')
+    await flushPromises()
+    expect(w.text()).toContain('收藏0')
+    expect(w.text()).not.toContain('收藏30')
+  })
+
+  it('条数不超过 PAGE_SIZE 时不渲染分页器', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url === '/api/promptbox') {
+        return { ok: true, json: async () => [
+          { id: 'c1', title: 'a', raw_prompt: 'p', categories: {}, extras: [], image_names: [], created_at: '', updated_at: '' },
+        ] } as any
+      }
+      return { ok: true, json: async () => ({}) } as any
+    }))
+    const w = mount(CollectionListPage, { global: { stubs: { NMenu: true } } })
+    await flushPromises()
+    expect(w.findComponent({ name: 'Pagination' }).exists()).toBe(false)
+  })
 })
