@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { NCard, NSpace, NInput, NButton, useMessage } from 'naive-ui'
+import { NCard, NSpace, NInput, NButton, NSwitch, useMessage } from 'naive-ui'
 import { getAnimaToken, setAnimaToken } from '../api/characterfinder'
 import { useTranslator } from '../composables/useTranslator'
 
 const msg = useMessage()
 const translator = useTranslator()
 const unloadingT = ref(false)
+const forceCpu = ref(false)
+const savingDevice = ref(false)
 const rulesYaml = ref('')
 const qualityTags = ref('')
 const tokenStatus = ref<{ configured: boolean; preview: string | null }>({ configured: false, preview: null })
@@ -20,10 +22,27 @@ async function load() {
     const q = await fetch('/api/config/quality').then(r => r.json())
     qualityTags.value = (q.tags || []).join(', ')
     tokenStatus.value = await getAnimaToken()
+    const dev = await fetch('/api/config/device').then(r => r.json())
+    forceCpu.value = !!dev.force_cpu
   } catch (e: any) { msg.error('加载配置失败：' + e.message) }
   translator.refreshStatus()  // 翻译模型下载/加载状态（不阻塞主配置加载）
 }
 onMounted(load)
+
+async function onToggleDevice(v: boolean) {
+  savingDevice.value = true
+  try {
+    const r = await fetch('/api/config/device', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ force_cpu: v })
+    }).then(r => r.json())
+    forceCpu.value = r.force_cpu
+    msg.success(v ? '已切换为 CPU 反推（已加载的反推模型将重新加载）' : '已切换为自动 GPU 反推（已加载的反推模型将重新加载）')
+  } catch (e: any) {
+    msg.error('切换失败：' + e.message)
+    forceCpu.value = !v  // 失败回滚开关状态
+  } finally { savingDevice.value = false }
+}
 
 async function saveToken() {
   if (!tokenInput.value.trim()) { msg.warning('请粘贴 token'); return }
@@ -63,6 +82,15 @@ async function onUnloadT() {
 
 <template>
   <n-space vertical>
+    <n-card title="反推设备">
+      <n-space align="center">
+        <n-switch :value="forceCpu" :loading="savingDevice" @update:value="onToggleDevice" />
+        <span style="font-size:14px">{{ forceCpu ? '强制 CPU' : '自动（GPU 优先）' }}</span>
+      </n-space>
+      <div style="font-size:12px;color:#888;margin-top:8px;line-height:1.6">
+        开启后反推（打标）强制用 CPU、不占 GPU 显存；关闭则自动选用 GPU（CUDA / DirectML）。切换会卸载当前已加载的反推模型，下次反推时按新设备重新加载。
+      </div>
+    </n-card>
     <n-card title="翻译模型（Hy-MT2 1.8B）">
       <div v-if="translator.state.downloaded" style="font-size:13px;color:#18a058;margin-bottom:8px">
         ✓ 已下载<span v-if="translator.state.loaded">（已加载，可直接翻译）</span> —— 各详情页分类点「翻译本分类」查看中文释义

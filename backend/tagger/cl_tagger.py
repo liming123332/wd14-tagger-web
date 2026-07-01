@@ -11,6 +11,7 @@ from PIL import Image
 from backend.config import settings
 from backend.tagger.models_spec import ModelSpec
 from backend.tagger._onnx_providers import select_providers
+from backend.config.runtime import get_force_cpu
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ class CLTagger:
         if not mapping_path.exists():
             raise FileNotFoundError(f"tag_mapping.json missing in {self.model_dir}")
 
-        self.session = InferenceSession(str(onnx_path), providers=select_providers())
+        self.session = InferenceSession(str(onnx_path), providers=select_providers(force_cpu=get_force_cpu()))
         logger.info("%s ONNX providers: %s", self.spec.key, self.session.get_providers())
         self.input_name = self.session.get_inputs()[0].name
 

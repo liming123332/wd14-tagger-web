@@ -7,6 +7,7 @@ import urllib.request
 from backend.config import settings
 from backend.tagger.models_spec import ModelSpec
 from backend.tagger._onnx_providers import select_providers
+from backend.config.runtime import get_force_cpu
 
 import logging
 
@@ -54,7 +55,7 @@ class OnnxTagger:
         if not onnx_path.exists():
             raise FileNotFoundError(f"model.onnx missing in {self.model_dir}")
 
-        self.session = InferenceSession(str(onnx_path), providers=select_providers())
+        self.session = InferenceSession(str(onnx_path), providers=select_providers(force_cpu=get_force_cpu()))
         logger.info("%s ONNX providers: %s", self.spec.key, self.session.get_providers())
         self.input_name = self.session.get_inputs()[0].name
         shape = self.session.get_inputs()[0].shape

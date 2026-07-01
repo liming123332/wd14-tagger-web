@@ -78,12 +78,15 @@ def _register_cuda_dll_dirs() -> None:
             pass
 
 
-def select_providers(available: list[str] | None = None) -> list[str]:
+def select_providers(available: list[str] | None = None, force_cpu: bool = False) -> list[str]:
     """返回 providers 列表，最优 GPU 后端插首位、CPU 兜底在末尾。
 
     返回形如 ["CUDAExecutionProvider", "CPUExecutionProvider"]；若无可用 GPU
     后端则仅 ["CPUExecutionProvider"]。同一次调用最多塞一个 GPU 后端（不混搭）。
+    force_cpu=True 时直接返回纯 CPU（设置页「反推设备」开关开启），跳过 onnxruntime 探测。
     """
+    if force_cpu:
+        return ["CPUExecutionProvider"]
     providers = ["CPUExecutionProvider"]
     if available is None:
         # 须在 import onnxruntime 前 prepend PATH，否则 cudnn64_9.dll 找不到、CUDA EP 静默退 CPU

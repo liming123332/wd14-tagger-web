@@ -2,8 +2,8 @@ import yaml
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from backend.config import settings
-from backend.deps import get_classifier
+from backend.config import settings, runtime
+from backend.deps import get_classifier, _release_taggers
 from backend.characterfinder import paths
 
 router = APIRouter(prefix="/api/config", tags=["config"])
@@ -94,3 +94,23 @@ def set_anima_token(payload: AnimaTokenPayload):
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(token, encoding="utf-8")
     return {"configured": True, "preview": _mask_token(token)}
+
+
+# ===== 反推设备（force_cpu 开关，设置页切换、立即生效）=====
+class DevicePayload(BaseModel):
+    force_cpu: bool
+
+
+@router.get("/device")
+def get_device():
+    """反推设备偏好：force_cpu=True 时反推（打标）强制走 CPU，否则自动探测 GPU。"""
+    return {"force_cpu": runtime.get_force_cpu()}
+
+
+@router.put("/device")
+def put_device(payload: DevicePayload):
+    """设置反推设备偏好并立即生效：写偏好 + 卸载已加载的 ONNX session，
+    下次反推 _load() 时按新 force_cpu 重建 InferenceSession（无需重启）。"""
+    runtime.set_force_cpu(payload.force_cpu)
+    released = _release_taggers()  # 立即生效：释放已加载 session，下次反推按新设备重载
+    return {"force_cpu": payload.force_cpu, "released": released}

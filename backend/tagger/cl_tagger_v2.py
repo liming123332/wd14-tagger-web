@@ -11,6 +11,7 @@ from PIL import Image
 from backend.config import settings
 from backend.tagger.models_spec import ModelSpec
 from backend.tagger._onnx_providers import select_providers
+from backend.config.runtime import get_force_cpu
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,7 @@ class CLTaggerV2:
             raise FileNotFoundError(f"model_vocabulary.json missing in {self.model_dir}")
 
         # onnxruntime 自动加载同目录 model.onnx.data（外部权重）
-        self.session = InferenceSession(str(onnx_path), providers=select_providers())
+        self.session = InferenceSession(str(onnx_path), providers=select_providers(force_cpu=get_force_cpu()))
         logger.info("%s ONNX providers: %s", self.spec.key, self.session.get_providers())
         self.input_name = self.session.get_inputs()[0].name
 
