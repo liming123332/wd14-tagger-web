@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import yaml
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -114,3 +117,55 @@ def put_device(payload: DevicePayload):
     runtime.set_force_cpu(payload.force_cpu)
     released = _release_taggers()  # 立即生效：释放已加载 session，下次反推按新设备重载
     return {"force_cpu": payload.force_cpu, "released": released}
+
+
+# ===== 数据目录（设置页配置，重启后端生效）=====
+class DataDirPayload(BaseModel):
+    path: str
+
+
+@router.get("/data-dir")
+def get_data_dir():
+    """当前数据目录、页面配置原值与来源（env > page > default）。
+
+    configured 实时读配置文件（PUT/DELETE 后立即反映）；source 是启动快照
+    （描述当前运行实例 current 的来源，改配置后需重启才变）。
+    """
+    return {
+        "current": str(settings.DATA_DIR),
+        "configured": settings.read_configured_data_dir(),
+        "source": settings.DATA_DIR_SOURCE,
+    }
+
+
+@router.put("/data-dir")
+def put_data_dir(payload: DataDirPayload):
+    """保存数据目录到 ROOT/data_dir.json，重启后端生效。保存前校验目标可写。"""
+    p = (payload.path or "").strip().strip('"').strip("'")
+    if not p:
+        raise HTTPException(status_code=400, detail="路径不能为空")
+    target = Path(p)
+    try:
+        runtime.ensure_data_dir_writable(target)
+    except OSError as ex:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"目标目录不可写：{target}。若是 NAS/网络盘，请检查共享在线、"
+                f"账户有读写权限、带密码共享需先 net use 建立连接。原因：{ex}"
+            ),
+        )
+    settings.DATA_DIR_PREF_PATH.write_text(
+        json.dumps({"path": p}), encoding="utf-8"
+    )
+    return {"ok": True, "configured": p, "note": "已保存，需重启后端生效"}
+
+
+@router.delete("/data-dir")
+def delete_data_dir():
+    """清除页面配置，回退到环境变量 / 默认。重启后端生效。"""
+    try:
+        settings.DATA_DIR_PREF_PATH.unlink()
+    except FileNotFoundError:
+        pass
+    return {"ok": True, "note": "已清除页面配置，需重启后端生效"}

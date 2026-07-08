@@ -1,9 +1,48 @@
 from __future__ import annotations
+import json
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]  # wd14-tagger-web/
 
-DATA_DIR = ROOT / "data"
+# 数据目录（data/）可外置到其他硬盘或 NAS。解析优先级（高→低）：
+#   1) 环境变量 WD14_DATA_DIR（运维硬覆盖，盖过页面配置）
+#   2) 页面配置文件 ROOT/data_dir.json（设置页写入）
+#   3) 默认 ROOT/data
+# 任一级缺失/损坏都安全降级到下一级。DATA_DIR 在启动时求值一次，
+# 改页面配置后需重启后端生效（所有派生路径随新进程重新求值）。
+DATA_DIR_PREF_PATH = ROOT / "data_dir.json"
+
+
+def _resolve_data_dir() -> tuple[Path, str]:
+    """返回 (data_dir, source)。source ∈ {'env','page','default'}，描述当前
+    运行实例 DATA_DIR 的来源（启动时锁定，改配置后需重启才变）。"""
+    env = os.environ.get("WD14_DATA_DIR", "").strip().strip('"').strip("'")
+    if env:
+        return Path(env), "env"
+    configured = read_configured_data_dir()
+    if configured:
+        return Path(configured), "page"
+    return ROOT / "data", "default"
+
+
+def read_configured_data_dir() -> str | None:
+    """实时读取页面配置文件里的路径值（未配置/损坏 → None）。
+
+    GET 接口用它返回最新 configured（PUT/DELETE 后立即反映），区别于启动时
+    锁定的 DATA_DIR / DATA_DIR_SOURCE。
+    """
+    try:
+        pref = json.loads(DATA_DIR_PREF_PATH.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return None
+    if isinstance(pref, dict):
+        p = str(pref.get("path") or "").strip().strip('"').strip("'")
+        return p or None
+    return None
+
+
+DATA_DIR, DATA_DIR_SOURCE = _resolve_data_dir()
 IMAGES_DIR = DATA_DIR / "images"
 PROMPTBOX_DIR = DATA_DIR / "promptbox"
 # === Character Finder（整合自 sd-character-finder）===

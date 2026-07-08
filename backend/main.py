@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from backend.config import settings
+from backend.config import settings, runtime
 from backend.api import routes_config
 
 
@@ -18,6 +18,25 @@ def _validate_config() -> None:
         raise RuntimeError("tag_rules.yaml missing 'categories' or 'priority'")
     if not Path(settings.QUALITY_TEMPLATE_PATH).exists():
         raise RuntimeError("quality_template.yaml missing")
+
+
+def _ensure_data_dir_writable() -> None:
+    """启动时确认数据目录存在且可写。
+
+    外置到 NAS/其他盘时，凭据缺失或网络中断会在此处尽早暴露，
+    避免运行中各处冒出模糊的 PermissionError。
+    """
+    try:
+        runtime.ensure_data_dir_writable()
+    except OSError as ex:
+        raise RuntimeError(
+            f"数据目录不可用：{settings.DATA_DIR}\n"
+            f"若已外置到 NAS/其他盘（WD14_DATA_DIR 或设置页配置），请检查：\n"
+            f"  1) 路径存在且共享在线；\n"
+            f"  2) 当前 Windows 账户对该路径有读写权限；\n"
+            f"  3) 带密码的共享需先 net use 建立连接，或存入凭据管理器。\n"
+            f"原始错误：{ex}"
+        ) from ex
 
 
 class SpaStaticFiles(StaticFiles):
@@ -39,6 +58,7 @@ def create_app() -> FastAPI:
     import mimetypes
     mimetypes.add_type("image/webp", ".webp")
     _validate_config()
+    _ensure_data_dir_writable()
     app = FastAPI(title="WD14 Tagger Web")
     app.add_middleware(CORSMiddleware, allow_origins=["*"],
                        allow_methods=["*"], allow_headers=["*"])

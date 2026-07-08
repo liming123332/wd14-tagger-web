@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { NCard, NSpace, NInput, NButton, NSwitch, useMessage } from 'naive-ui'
+import { ref, computed, onMounted } from 'vue'
+import { NCard, NSpace, NInput, NButton, NSwitch, NTag, useMessage } from 'naive-ui'
 import { getAnimaToken, setAnimaToken } from '../api/characterfinder'
 import { useTranslator } from '../composables/useTranslator'
 
@@ -14,6 +14,17 @@ const qualityTags = ref('')
 const tokenStatus = ref<{ configured: boolean; preview: string | null }>({ configured: false, preview: null })
 const tokenInput = ref('')
 const savingToken = ref(false)
+const dataDir = ref<{ current: string; configured: string | null; source: string }>({ current: '', configured: null, source: 'default' })
+const dataDirInput = ref('')
+const savingDataDir = ref(false)
+const resettingDataDir = ref(false)
+const sourceLabel = computed(() => {
+  const m: Record<string, string> = { env: '环境变量', page: '页面配置', default: '默认' }
+  return m[dataDir.value.source] || dataDir.value.source
+})
+const sourceTagType = computed<'warning' | 'info' | 'default'>(() =>
+  dataDir.value.source === 'env' ? 'warning' : dataDir.value.source === 'page' ? 'info' : 'default'
+)
 
 async function load() {
   try {
@@ -24,6 +35,9 @@ async function load() {
     tokenStatus.value = await getAnimaToken()
     const dev = await fetch('/api/config/device').then(r => r.json())
     forceCpu.value = !!dev.force_cpu
+    const dd = await fetch('/api/config/data-dir').then(r => r.json())
+    dataDir.value = dd
+    dataDirInput.value = dd.configured ?? dd.current
   } catch (e: any) { msg.error('加载配置失败：' + e.message) }
   translator.refreshStatus()  // 翻译模型下载/加载状态（不阻塞主配置加载）
 }
@@ -54,6 +68,37 @@ async function saveToken() {
   finally { savingToken.value = false }
 }
 
+async function saveDataDir() {
+  const p = dataDirInput.value.trim()
+  if (!p) { msg.warning('请填写目录路径'); return }
+  savingDataDir.value = true
+  try {
+    const r = await fetch('/api/config/data-dir', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: p })
+    })
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}))
+      throw new Error(e.detail || `HTTP ${r.status}`)
+    }
+    const j = await r.json()
+    dataDir.value.configured = j.configured
+    msg.success('已保存，重启后端生效：关闭黑窗重新双击 启动.bat')
+  } catch (e: any) { msg.error('保存失败：' + e.message) }
+  finally { savingDataDir.value = false }
+}
+
+async function resetDataDir() {
+  resettingDataDir.value = true
+  try {
+    await fetch('/api/config/data-dir', { method: 'DELETE' })
+    dataDir.value.configured = null
+    dataDirInput.value = dataDir.value.current
+    msg.success('已清除页面配置，重启后端生效')
+  } catch (e: any) { msg.error('清除失败：' + e.message) }
+  finally { resettingDataDir.value = false }
+}
+
 async function saveRules() {
   try { JSON.parse(rulesYaml.value) } catch { msg.error('rules 不是合法 JSON'); return }
   // 后端 rules 为只读展示，质量词可写；rules 编辑需 PUT 后端扩展（首版仅质量词可保存）
@@ -82,6 +127,26 @@ async function onUnloadT() {
 
 <template>
   <n-space vertical>
+    <n-card title="数据目录">
+      <div style="font-size:13px;margin-bottom:8px">
+        当前：<code>{{ dataDir.current }}</code>
+        <n-tag :type="sourceTagType" size="small" style="margin-left:8px">{{ sourceLabel }}</n-tag>
+      </div>
+      <n-input v-model:value="dataDirInput" :disabled="dataDir.source === 'env'"
+        placeholder="如 D:\tagger-data 或 \\Z4-eydz\135xxxx4048\wd14\data" />
+      <div v-if="dataDir.source === 'env'" style="font-size:12px;color:#d03050;margin-top:6px;line-height:1.6">
+        环境变量 WD14_DATA_DIR 已设置，优先于本配置；如需在此配置请先清除该环境变量。
+      </div>
+      <div v-else style="font-size:12px;color:#888;margin-top:6px;line-height:1.6">
+        支持本地盘（如 <code>D:\tagger-data</code>）与 NAS UNC 路径（如 <code>\\Z4-eydz\135xxxx4048\wd14\data</code>）。<br />
+        NAS 需当前 Windows 账户对该共享有读写权限（带密码共享先 <code>net use</code> 或存入凭据管理器）。<br />
+        切换后旧数据不会自动迁移，需手动复制或重新生成。
+      </div>
+      <n-space style="margin-top:8px">
+        <n-button type="primary" :loading="savingDataDir" :disabled="dataDir.source === 'env'" @click="saveDataDir">保存</n-button>
+        <n-button :loading="resettingDataDir" :disabled="!dataDir.configured" @click="resetDataDir">恢复默认</n-button>
+      </n-space>
+    </n-card>
     <n-card title="反推设备">
       <n-space align="center">
         <n-switch :value="forceCpu" :loading="savingDevice" @update:value="onToggleDevice" />

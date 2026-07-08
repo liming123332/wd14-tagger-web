@@ -6,6 +6,7 @@ node_modules/
 # frontend/dist/ 不忽略：纳入 git，整合包 git 更新时同步前端（用户无 node 无法 build）
 models/
 data/
+data_dir.json
 *.part
 *.onnx
 .DS_Store
